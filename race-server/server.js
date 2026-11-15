@@ -401,7 +401,10 @@ io.on("connection", (socket) => {
         if (chainState.status === "open") {
           closeStatus = "submitting";
           broadcast();
-          const txHash = await autoSettler.closeEntries(raceId);
+          const txHash = await autoSettler.closeEntries(raceId, (hash) => {
+            closeTxHash = hash;
+            broadcast();
+          });
           closeTxHash = txHash;
           closeStatus = "confirmed";
           broadcast();
