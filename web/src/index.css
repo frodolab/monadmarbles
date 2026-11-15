@@ -92,3 +92,15 @@ button:not(:disabled):hover { filter:brightness(1.11); }
   .arena-heading { left:12px; right:12px; top:12px; }
   .stage-label,.round-label { font-size:8px; letter-spacing:0.7px; }
 }
+
+
+/* Beta 3 synchronized spectator controls and live rankings */
+.camera-button { display:block; width:100%; border:1px solid #b9a4ff75; background:#333057; color:#f2eaff; font-size:11px; font-weight:750; border-radius:9px; padding:10px 9px; margin-top:12px; }
+.race-leaders { margin-top:13px; padding-top:10px; border-top:1px solid #ffffff22; max-height:230px; overflow-y:auto; }
+.race-leaders > small { display:block; font-size:9px; letter-spacing:1px; color:#ccbdf8; margin-bottom:9px; }
+.leader-line { display:flex; gap:7px; align-items:center; padding:5px 0; font-size:12px; }
+.leader-line span:nth-child(1) { width:16px; color:#9794bd; }
+.leader-line span:nth-child(3) { max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.leader-line span:last-child { margin-left:auto; font-variant-numeric:tabular-nums; color:#aaf1d0; }
+.winner-card { max-height: min(70vh, 510px); overflow-y:auto; }
+@media (max-width:680px) { .winner-card { top:57px; left:11px; right:11px; max-height:48vh; } }
