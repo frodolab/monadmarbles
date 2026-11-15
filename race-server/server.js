@@ -16,7 +16,7 @@ const io = new Server(httpServer, {
 });
 
 const maxPlayers = Math.max(2, Math.min(120, Number(process.env.MAX_PLAYERS) || 48));
-const designs = ["violet", "tangerine", "aqua", "rose", "lime", "gold", "blue", "mint"];
+const designs = ["bubblegum", "tangerine", "lemon-drop", "mint-chip", "blueberry", "grape-soda", "cherry-pop", "lime-rush", "peachy", "cotton-candy", "sky-splash", "midnight", "galaxy", "golden"];
 const demoEntryFee = 0.1;
 const operatorPin = process.env.OPERATOR_PIN || "";
 const serverSessionId = randomUUID();
@@ -68,7 +68,9 @@ function isOperator(payload) {
 }
 
 function addEntry(nickname, design) {
-  room.entries.push({ id: randomUUID(), nickname, design, joinedAt: Date.now(), source: "demo" });
+  const id = randomUUID();
+  room.entries.push({ id, nickname, design, joinedAt: Date.now(), source: "demo" });
+  return id;
 }
 
 function stopTimers() {
@@ -184,8 +186,8 @@ io.on("connection", (socket) => {
     const now = Date.now();
     if (now - lastJoin < 700) return reply(ack, false, "Please wait before joining again.");
     lastJoin = now;
-    addEntry(nickname, design);
-    reply(ack, true);
+    const entryId = addEntry(nickname, design);
+    if (typeof ack === "function") ack({ ok: true, entryId });
     broadcast();
   });
 
