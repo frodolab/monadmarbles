@@ -1,12 +1,18 @@
 export const DESIGNS = [
-  { label: "Violet", color: "#b58aff" },
-  { label: "Tangerine", color: "#ffb15e" },
-  { label: "Aqua", color: "#6cddf5" },
-  { label: "Rose", color: "#fa729a" },
-  { label: "Lime", color: "#c5ee72" },
-  { label: "Gold", color: "#ffe28b" },
-  { label: "Blue", color: "#748eff" },
-  { label: "Mint", color: "#70e6bb" },
+  { label: "Bubblegum", color: "#ff79b8" },
+  { label: "Tangerine", color: "#ffad55" },
+  { label: "Lemon Drop", color: "#ffe66d" },
+  { label: "Mint Chip", color: "#74e5bc" },
+  { label: "Blueberry", color: "#648fff" },
+  { label: "Grape Soda", color: "#b58aff" },
+  { label: "Cherry Pop", color: "#ff657b" },
+  { label: "Lime Rush", color: "#b6ef5c" },
+  { label: "Peachy", color: "#ffc39f" },
+  { label: "Cotton Candy", color: "#ef9eff" },
+  { label: "Sky Splash", color: "#7fdef8" },
+  { label: "Midnight", color: "#404c9d" },
+  { label: "Galaxy", color: "#8a60de" },
+  { label: "Golden", color: "#f9cc5b" },
 ] as const;
 
 export type Phase = "lobby" | "countdown" | "racing" | "finished";
@@ -60,6 +66,7 @@ export interface RaceFrame {
 export interface Result {
   ok: boolean;
   error?: string;
+  entryId?: string;
 }
 
 export function newLocalRoom(roundId = 1): RoomState {

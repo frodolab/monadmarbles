@@ -10,6 +10,7 @@ const configuredUrl = (import.meta.env.VITE_RACE_SERVER_URL as string | undefine
 const serverUrl = configuredUrl || (import.meta.env.DEV ? "http://localhost:3001" : "");
 
 export function useLobby() {
+  const [myEntryId, setMyEntryId] = useState<string | null>(() => sessionStorage.getItem("monad-marbles-entry-id"));
   const [room, setRoom] = useState<RoomState>(() => newLocalRoom());
   const [frame, setFrame] = useState<RaceFrame | null>(null);
   const [countdownAnchor, setCountdownAnchor] = useState<{ remainingMs: number; receivedAt: number } | null>(null);
@@ -57,6 +58,10 @@ export function useLobby() {
       } else {
         setCountdownAnchor(null);
       }
+      if (next.phase === "lobby" && !next.entries.some((entry) => entry.id === sessionStorage.getItem("monad-marbles-entry-id"))) {
+        sessionStorage.removeItem("monad-marbles-entry-id");
+        setMyEntryId(null);
+      }
       roomRef.current = next;
       setRoom(next);
       setMode("shared");
@@ -89,6 +94,10 @@ export function useLobby() {
     if (socket?.connected) {
       try {
         const result = await socket.timeout(4500).emitWithAck(event, payload) as Result;
+        if (event === "lobby:join" && result?.ok && result.entryId) {
+          sessionStorage.setItem("monad-marbles-entry-id", result.entryId);
+          setMyEntryId(result.entryId);
+        }
         return result || { ok: false, error: "No response from server." };
       } catch {
         return { ok: false, error: "The server did not respond. Try again." };
@@ -111,6 +120,8 @@ export function useLobby() {
         id: "local-" + Math.random().toString(36).slice(2),
         nickname, design, joinedAt: Date.now(), source: "demo",
       };
+      sessionStorage.setItem("monad-marbles-entry-id", entry.id);
+      setMyEntryId(entry.id);
       updateLocal({ ...current, entries: [...current.entries, entry] });
       return { ok: true };
     }
@@ -148,6 +159,7 @@ export function useLobby() {
 
   return {
     room,
+    myEntryId,
     frame,
     countdownAnchor,
     mode,
