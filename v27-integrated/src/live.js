@@ -33,34 +33,59 @@ const notify = (message) => {
 const hasEntry = () => Boolean(room?.entries?.some(entry =>
   entry.wallet?.toLowerCase() === wallet?.toLowerCase() ||
   (entry.nickname === short(wallet || '0x0000000000000000000000000000000000000000'))));
-const connectWallet = async () => {
-  if (!window.ethereum?.request) throw new Error('MetaMask is required for this preview');
-  const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-  if (!accounts?.[0]) throw new Error('No MetaMask account returned');
-  const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-  if (Number(BigInt(chainId)) !== 10143) {
-    try {
-      await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x279f' }] });
-    } catch (error) {
-      if (error?.code !== 4902) throw error;
-      await window.ethereum.request({
-        method: 'wallet_addEthereumChain',
-        params: [{ chainId: '0x279f', chainName: 'Monad Testnet', nativeCurrency: { name: 'Monad', symbol: 'MON', decimals: 18 }, rpcUrls: ['https://testnet-rpc.monad.xyz'], blockExplorerUrls: ['https://testnet.monadexplorer.com'] }],
-      });
-    }
-  }
-  wallet = accounts[0];
-  ui.setWallet(wallet);
-  notify('MetaMask connected · ' + short(wallet));
-  ui.applyRoom(room, wallet);
-  return wallet;
+// EIP-1193 single-flight: one wallet permission request at a time.
+// eth_accounts is silent; only eth_requestAccounts opens a new approval prompt.
+const getMetaMaskProvider = () => {
+  const injected = window.ethereum;
+  const candidates = Array.isArray(injected?.providers) ? injected.providers : [injected];
+  return candidates.find(candidate => candidate?.isMetaMask) || injected;
 };
-window.ethereum?.on?.('accountsChanged', accounts => {
+let connectInFlight = null;
+const connectWallet = async () => {
+  if (connectInFlight) return connectInFlight;
+  const provider = getMetaMaskProvider();
+  if (!provider?.request) throw new Error('Install or enable MetaMask to join this preview');
+  connectInFlight = (async () => {
+    let accounts = await provider.request({ method: 'eth_accounts' });
+    if (!accounts?.[0]) {
+      accounts = await provider.request({ method: 'eth_requestAccounts' });
+    }
+    if (!accounts?.[0]) throw new Error('No MetaMask account was returned');
+    const chainId = await provider.request({ method: 'eth_chainId' });
+    if (Number(BigInt(chainId)) !== 10143) {
+      try {
+        await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x279f' }] });
+      } catch (error) {
+        if (error?.code !== 4902) throw error;
+        await provider.request({
+          method: 'wallet_addEthereumChain',
+          params: [{ chainId: '0x279f', chainName: 'Monad Testnet', nativeCurrency: { name: 'Monad', symbol: 'MON', decimals: 18 }, rpcUrls: ['https://testnet-rpc.monad.xyz'], blockExplorerUrls: ['https://testnet.monadexplorer.com'] }],
+        });
+      }
+    }
+    wallet = accounts[0];
+    ui.setWallet(wallet);
+    notify('MetaMask connected · ' + short(wallet));
+    ui.applyRoom(room, wallet);
+    return wallet;
+  })();
+  try {
+    return await connectInFlight;
+  } catch (error) {
+    if (Number(error?.code) === -32002) {
+      throw new Error('MetaMask already has a pending request for this site. Open the MetaMask extension and approve or reject that existing request, then retry.');
+    }
+    throw error;
+  } finally {
+    connectInFlight = null;
+  }
+};
+getMetaMaskProvider()?.on?.('accountsChanged', accounts => {
   wallet = accounts?.[0] || null;
   ui.setWallet(wallet);
   ui.applyRoom(room, wallet);
 });
-window.ethereum?.on?.('chainChanged', () => notify('Wallet network changed; use Monad Testnet'));
+getMetaMaskProvider()?.on?.('chainChanged', () => notify('Wallet network changed; switch to Monad Testnet'));
 
 const join = async () => {
   if (waitingToJoin) return;
@@ -77,7 +102,11 @@ const join = async () => {
   finally { waitingToJoin = false; }
 };
 
-ui.connected = true;
+ui.connected = false;
+ui.verifyOperatorPin = async pin => {
+  await ack('operator:verify', { pin });
+  return true;
+};
 ui.join = join;
 ui.fill = async (pin, count) => {
   try { await ack('lobby:fill', { pin, count }); notify('Added demo racers'); return true; }
@@ -127,7 +156,17 @@ for (const [id, count] of [['addOne', 1], ['addTen', 10]]) {
   };
 }
 const instantStart = document.getElementById('instantStart');
-instantStart.style.display = 'none';
+instantStart.style.display = '';
+instantStart.textContent = '↻ RESET TEST ROUND';
+instantStart.onclick = async () => {
+  if (room?.phase === 'racing' || room?.phase === 'countdown') {
+    notify('Wait until the current round finishes before resetting');
+    return;
+  }
+  const pin = ui.getOperatorPin();
+  if (!pin) { document.getElementById('devAccess').click(); return; }
+  if (await ui.reset(pin)) notify('Preview lobby reset · ready for a clean test');
+};
 document.getElementById('registrationTimer').style.display = 'none';
 const devTitle = document.querySelector('#devModalTitle');
 if (devTitle) devTitle.textContent = 'Sandbox Operator PIN';
