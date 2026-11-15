@@ -88,7 +88,7 @@ export function useLobby() {
     const socket = socketRef.current;
     if (socket?.connected) {
       try {
-        const result = await socket.timeout(4500).emitWithAck(event, payload) as Result;
+        const result = await socket.timeout(event === "lobby:start" ? 145000 : 4500).emitWithAck(event, payload) as Result;
         return result || { ok: false, error: "No response from server." };
       } catch {
         return { ok: false, error: "The server did not respond. Try again." };
