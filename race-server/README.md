@@ -16,7 +16,7 @@ npm start
 
 1. Clients join with simulated entries; server validates phase and capacity.
 2. Operator (protected by `OPERATOR_PIN`) starts round; entry closes.
-3. After 3.5 seconds, server creates its own fixed-step Rapier world (60 Hz).
+3. After 10 seconds, server creates its own fixed-step Rapier world (60 Hz).
 4. Server publishes marble positions/rotations/progress approximately 12 times per second.
 5. Server chooses the **first** marble crossing the finish plane; a same-tick tie is broken by ID.
 6. Client browsers receive the official result and continue rendering that final state.

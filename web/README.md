@@ -7,7 +7,7 @@ The shared demo lobby and server-authoritative physics race now run on Railway.
 ## Features
 
 - Choose nickname and marble design; see joined marbles drop into the shared 3D bowl
-- Add eight simulated players, manually start a 3.5-second countdown, or reset the round
+- Add eight simulated players, manually start a 10-second countdown, or reset the round
 - One Node.js + Rapier 3D physics simulation runs on the Railway race server
 - Server broadcasts snapshots about 12 times per second; browsers interpolate for smooth playback
 - The first marble to cross the finish plane is determined **only on the server**

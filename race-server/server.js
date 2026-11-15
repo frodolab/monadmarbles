@@ -21,7 +21,7 @@ const demoEntryFee = 0.1;
 const operatorPin = process.env.OPERATOR_PIN || "";
 const serverSessionId = randomUUID();
 const isAutomatedTest = process.env.NODE_ENV === "test";
-const countdownMs = isAutomatedTest ? 80 : 3000;
+const countdownMs = isAutomatedTest ? 80 : 10000; // Manual start; ten-second shared countdown
 const physicsIntervalMs = isAutomatedTest ? 1 : 1000 / 60;
 const frameEveryTicks = 5; // 60 Hz physics, ~12 Hz snapshots
 
