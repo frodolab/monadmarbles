@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
-import { DESIGNS, newLocalRoom, type Entry, type Result, type RoomState } from "../game";
+import { DESIGNS, newLocalRoom, type Entry, type Result, type RoomState, type RaceFrame } from "../game";
 
 type Mode = "connecting" | "shared" | "local";
 type Action = "lobby:join" | "lobby:fill" | "lobby:start" | "lobby:reset";
@@ -11,6 +11,7 @@ const serverUrl = configuredUrl || (import.meta.env.DEV ? "http://localhost:3001
 
 export function useLobby() {
   const [room, setRoom] = useState<RoomState>(() => newLocalRoom());
+  const [frame, setFrame] = useState<RaceFrame | null>(null);
   const [mode, setMode] = useState<Mode>(serverUrl ? "connecting" : "local");
   const socketRef = useRef<Socket | null>(null);
   const roomRef = useRef(room);
@@ -32,8 +33,16 @@ export function useLobby() {
     socket.on("disconnect", () => setMode("local"));
     socket.on("connect_error", () => setMode("local"));
     socket.on("lobby:state", (next: RoomState) => {
+      if (next.roundId !== roomRef.current.roundId) setFrame(null);
       roomRef.current = next;
       setRoom(next);
+    });
+    socket.on("race:snapshot", (next: RaceFrame) => {
+      if (next.roundId !== roomRef.current.roundId) return;
+      setFrame((old) => old && old.roundId === next.roundId && old.tick > next.tick ? old : next);
+    });
+    socket.on("race:error", (message: string) => {
+      console.error("Shared race error:", message);
     });
 
     return () => {
@@ -94,7 +103,9 @@ export function useLobby() {
     }
 
     if (event === "lobby:start") {
-      if (current.phase !== "lobby") return { ok: false, error: "Race already started." };
+      return { ok: false, error: "The shared race server must be online to start an official race." };
+      // This is deliberately unavailable in offline demo mode.
+      /* if (current.phase !== "lobby") return { ok: false, error: "Race already started." };
       if (current.entries.length < 2) return { ok: false, error: "Add at least two marbles." };
       const roundId = current.roundId;
       updateLocal({ ...current, phase: "countdown", startsAt: Date.now() + 3500 });
@@ -104,10 +115,11 @@ export function useLobby() {
           updateLocal({ ...next, phase: "racing" });
         }
       }, 3500);
-      return { ok: true };
+      return { ok: true }; */
     }
 
     if (event === "lobby:reset") {
+      setFrame(null);
       updateLocal(newLocalRoom(current.roundId + 1));
       return { ok: true };
     }
@@ -117,6 +129,7 @@ export function useLobby() {
 
   return {
     room,
+    frame,
     mode,
     hasServerUrl: Boolean(serverUrl),
     join: (nickname: string, design: number) => action("lobby:join", { nickname, design }),
