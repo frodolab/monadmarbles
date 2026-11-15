@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatEther } from "viem";
-import type { Result, RoomState } from "../game";
+import type { RoomState } from "../game";
 import {
-  closeRaceEntries, createTestnetRace, signEntryNickname, submitRaceEntry,
+  closeRaceEntries, createTestnetRace, submitRaceEntry,
   waitForTestnetTransaction, testnetExplorerTx, cancelTestnetRace, claimTestnetRefund,
 } from "../chain/monad";
 
@@ -31,13 +31,11 @@ function savePending(pending: Pending | null) {
 const errorMessage = (e: unknown) => e instanceof Error ? e.message : "Unknown wallet or RPC failure";
 
 export function PaidEntryControls({
-  room, walletAddress, nickname, design, verify, connected,
+  room, walletAddress, design, connected,
 }: {
   room: RoomState;
   walletAddress: string | null;
-  nickname: string;
   design: number;
-  verify: (payload: {raceId: string; txHash: string; nickname: string; signature: string}) => Promise<Result>;
   connected: boolean;
 }) {
   const [busy, setBusy] = useState(false);
@@ -57,26 +55,29 @@ export function PaidEntryControls({
     savePending(value);
   }
 
+  // Paid entries are admitted from confirmed on-chain PlayerJoined events.
+  // A second personal_sign request is not necessary for registration.
+  useEffect(() => {
+    if (!pending || !walletAddress) return;
+    const verified = room.entries.some(entry =>
+      entry.source === "chain" &&
+      entry.txHash?.toLowerCase() === pending.txHash.toLowerCase() &&
+      entry.wallet?.toLowerCase() === walletAddress.toLowerCase() &&
+      entry.id.startsWith("chain-" + pending.raceId + "-")
+    );
+    if (verified) {
+      store(null);
+      setNotice("Confirmed on-chain registration — your marble is visible to everyone!");
+    }
+  }, [room.entries, pending, walletAddress]);
+
   async function finalizePending(item: Pending) {
     if (!walletAddress) throw new Error("Connect the wallet that submitted this payment.");
     await waitForTestnetTransaction(item.txHash);
-    const signature = await signEntryNickname({
-      walletAddress, raceId: item.raceId, transactionHash: item.txHash,
-      nickname: item.nickname,
-    });
-    const response = await verify({
-      raceId: item.raceId,
-      txHash: item.txHash,
-      nickname: item.nickname,
-      signature,
-    });
-    if (!response.ok) throw new Error(response.error || "Server verification is pending.");
-    store(null);
-    setNotice("Confirmed on-chain registration — marble visible on all screens!");
+    setNotice("Payment confirmed. Waiting for the race server to display your marble. Do not pay again.");
   }
 
   async function join() {
-    const name = nickname.trim();
     if (!walletAddress || !ready || !chain?.chainRaceId || !chain.entryFeeWei) {
       setNotice("Connect MetaMask and wait for the server to confirm the open race.");
       return;
@@ -85,14 +86,10 @@ export function PaidEntryControls({
       setNotice("You already have a payment awaiting verification. Retry that transaction instead.");
       return;
     }
-    if (!name || name.length > 18 || /[<>\x00-\x1F\x7F]/.test(name)) {
-      setNotice("Enter a valid nickname (1–18 characters) before paying.");
-      return;
-    }
     setBusy(true);
     try {
       const hash = await submitRaceEntry(walletAddress, chain.chainRaceId, design, chain.entryFeeWei);
-      const entry = { txHash: hash, raceId: chain.chainRaceId, nickname: name };
+      const entry = { txHash: hash, raceId: chain.chainRaceId, nickname: "" };
       store(entry);
       setRefundRaceId(entry.raceId);
       try { window.localStorage.setItem("monad-marbles-last-paid-race-id", entry.raceId); }
@@ -100,7 +97,7 @@ export function PaidEntryControls({
       setNotice("Payment submitted. Waiting for two testnet confirmations: " + hash);
       await finalizePending(entry);
     } catch (e) {
-      setNotice(errorMessage(e) + " If your transaction succeeded, retry verification—do not pay again.");
+      setNotice(errorMessage(e) + " If your transaction succeeded, check confirmations below—do not pay again.");
     } finally { setBusy(false); }
   }
 
@@ -140,13 +137,13 @@ export function PaidEntryControls({
         disabled={busy || !ready || !!pending || room.phase !== "lobby" || room.entries.length >= room.maxPlayers}
         onClick={() => void join()}
       >PAY {fee} TESTNET MON & JOIN RACE</button>
-      <p className="fine-print">Payment goes to the contract, never to the race server. Only verified blockchain events create marbles.</p>
+      <p className="fine-print">Payment goes to the contract, never to the race server. Confirmed blockchain events create marbles with a shortened wallet-address name; no extra signature required.</p>
       {pending && (
         <div className="pending-entry">
           <small>TX SENT · VERIFICATION MAY BE RETRIED WITHOUT PAYING AGAIN</small>
           <a href={testnetExplorerTx(pending.txHash)} target="_blank" rel="noreferrer">View transaction on Monad Explorer</a>
           <button className="secondary-button" type="button" disabled={busy || !connected || !walletAddress}
-            onClick={() => void retry()}>RETRY VERIFICATION — NO NEW PAYMENT</button>
+            onClick={() => void retry()}>CHECK CONFIRMATIONS — NO NEW PAYMENT</button>
         </div>
       )}
       <div className="refund-section">
