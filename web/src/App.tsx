@@ -1,18 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import BowlScene from "./components/BowlScene";
 import RaceScene from "./components/RaceScene";
 import { DESIGNS } from "./game";
 import { useLobby } from "./hooks/useLobby";
 
 export default function App() {
-  const { room, mode, hasServerUrl, join, fill, start, reset } = useLobby();
+  const { room, frame, mode, hasServerUrl, join, fill, start, reset } = useLobby();
   const [nickname, setNickname] = useState("");
   const [designIndex, setDesignIndex] = useState(0);
   const [operatorPin, setOperatorPin] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const [localWinner, setLocalWinner] = useState<string | null>(null);
-  const [crossed, setCrossed] = useState<string[]>([]);
+  const [autoFollow, setAutoFollow] = useState(true);
   const [clock, setClock] = useState(Date.now());
 
   useEffect(() => {
@@ -21,27 +20,30 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    setLocalWinner(null);
-    setCrossed([]);
     setNotice("");
   }, [room.roundId]);
 
   const currentDesign = DESIGNS[designIndex];
   const isLobby = room.phase === "lobby";
-  const isRacing = room.phase === "racing";
+  const showingRace = room.phase === "racing" || room.phase === "finished";
   const pool = (room.entries.length * room.demoEntryFee).toFixed(1);
   const countdown = room.startsAt === null
     ? 0
     : Math.max(0, Math.ceil((room.startsAt - clock) / 1000));
   const winner = useMemo(
-    () => room.entries.find((entry) => entry.id === localWinner),
-    [room.entries, localWinner],
+    () => room.entries.find((entry) => entry.id === room.winnerId),
+    [room.entries, room.winnerId],
   );
-
-  const finish = useCallback((id: string) => {
-    setLocalWinner((previous) => previous ?? id);
-    setCrossed((previous) => previous.includes(id) ? previous : [...previous, id]);
-  }, []);
+  const leaders = useMemo(
+    () => [...(frame?.marbles || [])]
+      .sort((a, b) => b.progress - a.progress)
+      .slice(0, 10)
+      .map((marble) => ({
+        ...marble,
+        player: room.entries.find((entry) => entry.id === marble.id),
+      })),
+    [frame, room.entries],
+  );
 
   async function operate(action: () => Promise<{ ok: boolean; error?: string }>, message: string) {
     setBusy(true);
@@ -63,13 +65,13 @@ export default function App() {
         <div className="brand">
           <div className="brand-logo">M</div>
           <div>
-            <div className="eyebrow">MONAD BLITZ · BETA 2</div>
+            <div className="eyebrow">MONAD BLITZ · BETA 3</div>
             <h1>MONAD <span>MARBLES</span></h1>
           </div>
         </div>
         <div className={"connection " + (mode === "shared" ? "online" : "offline")}>
           <span className="dot" />
-          {mode === "shared" ? "SHARED LOBBY LIVE" : mode === "connecting" ? "CONNECTING…" : "LOCAL DEMO · NOT SHARED"}
+          {mode === "shared" ? "LIVE · SHARED PHYSICS" : mode === "connecting" ? "CONNECTING…" : "LOCAL DEMO · NOT SHARED"}
         </div>
       </header>
 
@@ -135,14 +137,14 @@ export default function App() {
 
         <main className="arena">
           <div className="arena-backdrop">
-            {isRacing ? (
-              <RaceScene entries={room.entries} roundId={room.roundId} onFinish={finish} />
+            {showingRace ? (
+              <RaceScene entries={room.entries} roundId={room.roundId} frame={frame} autoFollow={autoFollow} />
             ) : (
               <BowlScene entries={room.entries} roundId={room.roundId} />
             )}
           </div>
           <div className="arena-heading">
-            <span className="stage-label">{isRacing ? "THE RACE IS ON" : room.phase === "countdown" ? "GET READY TO DROP" : "THE WAITING BOWL"}</span>
+            <span className="stage-label">{room.phase === "finished" ? "THE RACE HAS FINISHED" : room.phase === "racing" ? "THE RACE IS ON" : room.phase === "countdown" ? "GET READY TO DROP" : "THE WAITING BOWL"}</span>
             <span className="round-label">ROUND #{String(room.roundId).padStart(3, "0")}</span>
           </div>
 
@@ -154,18 +156,36 @@ export default function App() {
           )}
 
           <div className="bottom-hint">
-            {isRacing
-              ? "LOCAL PHYSICS PREVIEW · Drag to orbit · Scroll to zoom"
-              : "MARBLES DROP AS PEOPLE JOIN · Drag to orbit · Scroll to zoom"}
+            {showingRace
+              ? autoFollow ? "SERVER PHYSICS · CAMERA FOLLOWS LEADERS" : "SERVER PHYSICS · DRAG TO ORBIT"
+              : "MARBLES DROP AS PEOPLE JOIN · DRAG TO ORBIT"}
           </div>
 
-          {isRacing && (
+          {showingRace && (
             <div className="winner-card">
-              <small>FIRST TO FINISH · LOCAL PREVIEW</small>
+              <small>FIRST TO FINISH · OFFICIAL SERVER RESULT</small>
               {winner ? (
                 <strong><span style={{ background: DESIGNS[winner.design]?.color }} />{winner.nickname} wins!</strong>
+              ) : room.phase === "finished" ? (
+                <strong>No finisher · Race timed out</strong>
               ) : (
-                <strong>Racing… <span className="muted">{crossed.length}/{room.entries.length}</span></strong>
+                <strong>Race in progress…</strong>
+              )}
+              <button className="camera-button" type="button" onClick={() => setAutoFollow((v) => !v)}>
+                {autoFollow ? "Switch to free camera" : "Follow top 12 marbles"}
+              </button>
+              {leaders.length > 0 && (
+                <div className="race-leaders">
+                  <small>LIVE LEADERBOARD · SERVER RANKINGS</small>
+                  {leaders.map((marble, index) => (
+                    <div key={marble.id} className="leader-line">
+                      <span>{index + 1}.</span>
+                      <span className="mini-marble" style={{ background: DESIGNS[marble.player?.design ?? 0]?.color }} />
+                      <span>{marble.player?.nickname || "Racer"}</span>
+                      <span>{Math.round(marble.progress * 100)}%</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}
@@ -180,7 +200,7 @@ export default function App() {
           </div>
           <div className="state-row">
             <span>STATUS</span>
-            <strong>{room.phase === "lobby" ? "OPEN FOR ENTRIES" : room.phase === "countdown" ? "STARTING" : "RACING"}</strong>
+            <strong>{room.phase === "lobby" ? "OPEN FOR ENTRIES" : room.phase === "countdown" ? "STARTING" : room.phase === "finished" ? "FINISHED" : "RACING"}</strong>
           </div>
           <p className="fine-print">*Illustrative testnet pool. No actual MON is deposited.</p>
 
@@ -200,7 +220,7 @@ export default function App() {
           >+ ADD 8 DEMO MARBLES</button>
           <button
             className="primary-button"
-            disabled={!isLobby || busy || room.entries.length < 2}
+            disabled={!isLobby || busy || room.entries.length < 2 || mode !== "shared"}
             onClick={() => void operate(() => start(operatorPin), "Race countdown started!")}
           >▶ START RACE</button>
           <button
@@ -214,13 +234,13 @@ export default function App() {
           <div className="small-title">BETA STATUS</div>
           <p className="muted explanation">
             {mode === "shared"
-              ? "Lobby entries, start, and reset are shared across browsers through Socket.IO."
+              ? "The Railway server calculates the official marble physics and broadcasts positions to all spectators."
               : hasServerUrl
                 ? "The shared server is unreachable. Actions run locally until the connection is restored."
                 : "No race-server URL is configured. This is a local-only demo."}
           </p>
           <p className="muted explanation">
-            The race physics still runs independently in each browser. Beta 3 will provide one authoritative winner.
+            All browsers use the same authoritative race result. This is still a mock-entry demo, without blockchain payments or verified fairness.
           </p>
         </aside>
       </div>
