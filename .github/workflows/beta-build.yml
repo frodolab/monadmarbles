@@ -1,0 +1,27 @@
+name: Beta 2 build check
+on:
+  push:
+    branches: [beta]
+  pull_request:
+    branches: [main, beta]
+
+jobs:
+  web-and-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm install --no-audit --no-fund
+      - name: Verify frontend TypeScript and production build
+        working-directory: web
+        run: npm run build
+      - name: Install backend dependencies
+        working-directory: race-server
+        run: npm install --no-audit --no-fund
+      - name: Check backend syntax
+        working-directory: race-server
+        run: node --check server.js
