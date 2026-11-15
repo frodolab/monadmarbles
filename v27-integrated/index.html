@@ -898,7 +898,13 @@ window.addEventListener('message',event=>{
  if(event.origin!==location.origin||event.source!==raceFrame.contentWindow)return;
  if(event.data?.type==='monadmarbles:race-ready'){
   if(!raceTransitioning)return;
-  raceFrameReady=true;$('raceLoadingNote').hidden=true;tryReveal();if(window.MonadMarblesPreviewBridge?.pendingResult)raceFrame.contentWindow.postMessage({type:'monadmarbles:official-result',...window.MonadMarblesPreviewBridge.pendingResult},location.origin);
+  raceFrameReady=true;
+  $('raceLoadingNote').hidden=true;
+  // Late-loaded iframe immediately receives the latest canonical server frame.
+  const preview=window.MonadMarblesPreviewBridge;
+  if(preview?.lastFrame)raceFrame.contentWindow.postMessage({type:'monadmarbles:race-frame',frame:preview.lastFrame},location.origin);
+  tryReveal();
+  if(preview?.pendingResult)raceFrame.contentWindow.postMessage({type:'monadmarbles:official-result',...preview.pendingResult},location.origin);
  }else if(event.data?.type==='monadmarbles:race-error'){
   abortRace('Could not initialize the 3D race. '+String(event.data.message||''));
  }else if(event.data?.type==='monadmarbles:race-finished'){
@@ -1094,7 +1100,7 @@ window.MonadMarblesPreviewBridge={
   const key=String(next.sessionId||'')+'-'+String(next.raceId||'');
   if(syncedRaceKey!==key){
    if(syncedRaceKey)resetPreview();
-   syncedRaceKey=key;this.pendingResult=null;
+   syncedRaceKey=key;this.pendingResult=null;this.lastFrame=null;
   }
   // Treat the server roster as EXACTLY authoritative: no stale local
   // entries and no unverified "mock wallet" entries survive synchronization.
@@ -1151,7 +1157,15 @@ window.MonadMarblesPreviewBridge={
   $('join').disabled=!isLobby||Boolean(myMarble)||incoming.length>=next.maxPlayers;
   $('start').disabled=!isLobby||incoming.length<2;
  },
- setFrame(frame){this.lastFrame=frame;},
+ setFrame(frame){
+  if(frame?.course!=='v27')return;
+  if(this.lastFrame && this.lastFrame.raceId===frame.raceId &&
+     this.lastFrame.sessionId===frame.sessionId && frame.tick<this.lastFrame.tick)return;
+  this.lastFrame=frame;
+  if(raceFrameReady&&raceFrame?.contentWindow){
+   raceFrame.contentWindow.postMessage({type:'monadmarbles:race-frame',frame},location.origin);
+  }
+ },
  setOfficialResult(result){
   this.pendingResult=result;
   if(raceFrame?.contentWindow&&raceFrameReady)raceFrame.contentWindow.postMessage({type:'monadmarbles:official-result',...result},location.origin);
