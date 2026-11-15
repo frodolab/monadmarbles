@@ -108,7 +108,7 @@ contract MonadMarblesAutoTest {
         require(address(game).balance == 0, "double payout");
     }
 
-    function testFailedRecipientRevertsEverythingAndAllowsCancelRefund() public {
+    function testRejectingRecipientRevertsEverythingAndAllowsCancelRefund() public {
         RejectingWallet rejecting = new RejectingWallet(game);
         rejecting.enter{value: FEE}(raceId);
         vm.prank(BOB);
