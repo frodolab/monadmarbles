@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/monad-testnet-contracts
+      - feature/monad-auto-payout
     paths:
       - "contracts/**"
       - ".github/workflows/foundry-contracts.yml"
@@ -34,9 +35,10 @@ jobs:
         run: |
           mkdir -p abi
           forge inspect src/MonadMarbles.sol:MonadMarbles abi --json > abi/MonadMarbles.json
+          forge inspect src/MonadMarblesAuto.sol:MonadMarblesAuto abi --json > abi/MonadMarblesAuto.json
       - name: Upload ABI artifact
         uses: actions/upload-artifact@v4
         with:
           name: MonadMarbles-ABI
-          path: contracts/abi/MonadMarbles.json
+          path: contracts/abi/*.json
           retention-days: 14
