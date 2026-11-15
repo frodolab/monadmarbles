@@ -30,3 +30,6 @@ jobs:
       - name: Test synchronized races, PIN and chain workers
         working-directory: race-server
         run: npm test
+      - name: Test 300-unit authoritative V27 course
+        working-directory: race-server
+        run: npm run test:v27
