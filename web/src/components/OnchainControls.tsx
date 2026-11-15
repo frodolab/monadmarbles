@@ -3,7 +3,7 @@ import { formatEther } from "viem";
 import type { Result, RoomState } from "../game";
 import {
   closeRaceEntries, createTestnetRace, signEntryNickname, submitRaceEntry,
-  waitForTestnetTransaction, testnetExplorerTx,
+  waitForTestnetTransaction, testnetExplorerTx, cancelTestnetRace, claimTestnetRefund,
 } from "../chain/monad";
 
 type Pending = { txHash: `0x${string}`; raceId: string; nickname: string };
@@ -43,6 +43,10 @@ export function PaidEntryControls({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<Pending | null>(readPending);
+  const [refundRaceId, setRefundRaceId] = useState(() => {
+    try { return window.localStorage.getItem("monad-marbles-last-paid-race-id") || "1"; }
+    catch { return "1"; }
+  });
   const chain = room.blockchain;
   const ready = connected && chain?.status === "open" && chain.synced &&
     Boolean(chain.chainRaceId) && Boolean(walletAddress);
@@ -90,6 +94,9 @@ export function PaidEntryControls({
       const hash = await submitRaceEntry(walletAddress, chain.chainRaceId, design, chain.entryFeeWei);
       const entry = { txHash: hash, raceId: chain.chainRaceId, nickname: name };
       store(entry);
+      setRefundRaceId(entry.raceId);
+      try { window.localStorage.setItem("monad-marbles-last-paid-race-id", entry.raceId); }
+      catch { /* Storage is optional. */ }
       setNotice("Payment submitted. Waiting for two testnet confirmations: " + hash);
       await finalizePending(entry);
     } catch (e) {
@@ -104,6 +111,22 @@ export function PaidEntryControls({
       await finalizePending(pending);
     } catch (e) {
       setNotice(errorMessage(e) + " No additional MON was submitted.");
+    } finally { setBusy(false); }
+  }
+
+  async function claimRefund() {
+    if (!walletAddress || !/^\d+$/.test(refundRaceId) || BigInt(refundRaceId) <= 0n) {
+      setNotice("Connect the paying wallet and enter the canceled race's numeric ID.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const hash = await claimTestnetRefund(walletAddress, refundRaceId);
+      setNotice("Claiming your canceled-race refund: " + hash);
+      await waitForTestnetTransaction(hash);
+      setNotice("Refund claimed on Monad Testnet: " + hash);
+    } catch (e) {
+      setNotice(errorMessage(e) + " Refunds are available only after the owner cancels the race.");
     } finally { setBusy(false); }
   }
 
@@ -126,6 +149,15 @@ export function PaidEntryControls({
             onClick={() => void retry()}>RETRY VERIFICATION — NO NEW PAYMENT</button>
         </div>
       )}
+      <div className="refund-section">
+        <div className="wallet-onchain-title">RECOVERY / REFUNDS</div>
+        <p className="fine-print">If the operator cancels an on-chain race, each paying wallet can claim its own testnet MON back.</p>
+        <label htmlFor="refund-race">CANCELED ON-CHAIN RACE ID</label>
+        <input id="refund-race" inputMode="numeric" value={refundRaceId}
+          onChange={event => setRefundRaceId(event.target.value)} placeholder="1"/>
+        <button className="outline-button" type="button" disabled={busy || !walletAddress}
+          onClick={() => void claimRefund()}>CLAIM REFUND (CANCELED RACES ONLY)</button>
+      </div>
       {notice && <p className="notice" role="status">{notice}</p>}
     </div>
   );
@@ -193,6 +225,19 @@ export function PaidOperatorControls({
     } finally { setBusy(false); }
   }
 
+  async function cancel() {
+    if (!walletAddress || !chain?.chainRaceId) return;
+    setBusy(true);
+    try {
+      const hash = await cancelTestnetRace(walletAddress, chain.chainRaceId);
+      setNotice("Canceling race on Monad Testnet: " + hash);
+      await waitForTestnetTransaction(hash);
+      setNotice("Race canceled. Registered wallets can claim individual refunds.");
+    } catch (e) {
+      setNotice(errorMessage(e));
+    } finally { setBusy(false); }
+  }
+
   return (
     <div className="onchain-operator-controls">
       {chain?.status === "waiting" && (
@@ -208,6 +253,10 @@ export function PaidOperatorControls({
           onClick={() => void begin()}>
           {chain?.status === "closed" ? "▶ START CONFIRMED CLOSED RACE" : "▶ CLOSE ENTRIES & START RACE"}
         </button>
+      )}
+      {hasRace && (chain?.status === "open" || chain?.status === "closed" || chain?.status === "interrupted") && (
+        <button className="outline-button" type="button" disabled={busy || !walletAddress}
+          onClick={() => void cancel()}>CANCEL RACE ON-CHAIN / ALLOW REFUNDS</button>
       )}
       <p className="fine-print">
         Operator retains manual control; countdown is 10 seconds.

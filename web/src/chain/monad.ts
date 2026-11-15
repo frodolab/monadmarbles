@@ -19,6 +19,8 @@ const contractABI = parseAbi([
   "function createRace(uint256 entryFee, uint16 maxEntries) returns (uint256)",
   "function joinRace(uint256 raceId, uint8 design) payable returns (uint256)",
   "function closeEntries(uint256 raceId)",
+  "function cancelRace(uint256 raceId)",
+  "function claimRefund(uint256 raceId)",
   "function activeRaceId() view returns (uint256)",
   "function nextRaceId() view returns (uint256)",
   "function races(uint256) view returns (uint8 status, uint256 entryFee, uint256 prizePool, uint256 winningEntryId, uint64 createdAt, uint64 closedAt, uint16 maxEntries, uint16 entryCount, bool prizeClaimed)",
@@ -216,3 +218,17 @@ export async function createTestnetRace(walletAddress: string, entryFeeMON = "0.
 
 export const testnetExplorerTx = (txHash: string) =>
   "https://testnet.monadexplorer.com/tx/" + txHash;
+
+export async function cancelTestnetRace(walletAddress: string, raceId: string) {
+  const data = encodeFunctionData({
+    abi: contractABI, functionName: "cancelRace", args: [BigInt(raceId)],
+  });
+  return sendContractTransaction({ walletAddress, data });
+}
+
+export async function claimTestnetRefund(walletAddress: string, raceId: string) {
+  const data = encodeFunctionData({
+    abi: contractABI, functionName: "claimRefund", args: [BigInt(raceId)],
+  });
+  return sendContractTransaction({ walletAddress, data });
+}
