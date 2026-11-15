@@ -531,6 +531,7 @@ window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camer
 // elements here. That null dereference prevented init() from ever running.
 async function init(){try{await RAPIER.init();world=new RAPIER.World({x:0,y:-22,z:0});world.timestep=STEP;createTrack();createBowl();createUpperBowl();
  if(handoff?.participants?.length){for(const racer of handoff.participants.slice(0,MAX))createPlayer(String(racer.username||'Racer'),Number(racer.marbleDesign||0)%COLORS.length,!!racer.isBot,racer.walletAddress||null,racer.id,racer.color||null)}
+ else if(handoff?.livePreview){toast('Waiting for server entrants; no extra marbles will be created.');}
  else{addBots(12);toast('No lobby entries found; adding racers.');}
  preparePodium();updateUI();
  // Draw a synchronous first frame before signaling readiness. This works even
