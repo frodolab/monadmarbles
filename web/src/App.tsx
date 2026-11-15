@@ -9,7 +9,7 @@ import { countdownSeconds } from "./utils/countdown";
 import { connectMetaMask, readContractOverview, contractAddress, type ContractOverview } from "./chain/monad";
 
 export default function App() {
-  const { room, frame, countdownAnchor, mode, hasServerUrl, join, verify, fill, start, reset } = useLobby();
+  const { room, frame, countdownAnchor, mode, hasServerUrl, join, fill, start, reset } = useLobby();
   const [nickname, setNickname] = useState("");
   const [designIndex, setDesignIndex] = useState(0);
   const [operatorPin, setOperatorPin] = useState("");
@@ -134,15 +134,21 @@ export default function App() {
             >›</button>
           </div>
 
-          <label htmlFor="nickname">PLAYER NICKNAME</label>
-          <input
-            id="nickname"
-            maxLength={18}
-            placeholder="Your racer name"
-            value={nickname}
-            onChange={(event) => setNickname(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Enter" && isLobby && !busy) void addMarble(); }}
-          />
+          {onchain ? (
+            <p className="fine-print">Your on-chain marble uses a shortened wallet address as its name. No extra wallet signature is needed.</p>
+          ) : (
+            <>
+              <label htmlFor="nickname">PLAYER NICKNAME</label>
+              <input
+                id="nickname"
+                maxLength={18}
+                placeholder="Your racer name"
+                value={nickname}
+                onChange={(event) => setNickname(event.target.value)}
+                onKeyDown={(event) => { if (event.key === "Enter" && isLobby && !busy) void addMarble(); }}
+              />
+            </>
+          )}
           <button
             className="primary-button"
             type="button"
@@ -172,8 +178,8 @@ export default function App() {
             <button className="outline-button" type="button" onClick={() => void refreshChain()}>REFRESH CHAIN STATUS</button>
           </div>
           {onchain && (
-            <PaidEntryControls room={room} walletAddress={walletAddress} nickname={nickname}
-              design={designIndex} verify={verify} connected={mode === "shared"} />
+            <PaidEntryControls room={room} walletAddress={walletAddress}
+              design={designIndex} connected={mode === "shared"} />
           )}
 
           <div className="divider" />
