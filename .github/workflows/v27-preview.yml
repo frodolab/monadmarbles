@@ -1,0 +1,32 @@
+name: V27 integration preview checks
+on:
+  push:
+    branches: [feature/v27-backend-integration-preview]
+  workflow_dispatch:
+
+jobs:
+  frontend-and-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install V27 frontend
+        working-directory: v27-integrated
+        run: npm install --no-audit --no-fund
+      - name: Build V27 frontend
+        working-directory: v27-integrated
+        run: npm run build
+      - name: V27 local API tests
+        working-directory: v27-integrated
+        run: npm run test:security
+      - name: Install working race backend
+        working-directory: race-server
+        run: npm install --no-audit --no-fund
+      - name: Check backend syntax
+        working-directory: race-server
+        run: node --check server.js
+      - name: Test synchronized races, PIN and chain workers
+        working-directory: race-server
+        run: npm test
