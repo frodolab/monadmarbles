@@ -44,10 +44,11 @@ function TrackVisuals() {
   );
 }
 
-function MarbleVisual({ entry, sample, index }: {
+function MarbleVisual({ entry, sample, index, highlighted }: {
   entry: Entry;
   sample?: MarbleFrame;
   index: number;
+  highlighted: boolean;
 }) {
   const mesh = useRef<Mesh>(null);
   const firstSample = useRef(true);
@@ -80,6 +81,12 @@ function MarbleVisual({ entry, sample, index }: {
         4.55 + Math.floor((index % 24) / 6) * 0.68,
       ]}
     >
+      {highlighted && (
+        <mesh scale={1.35}>
+          <sphereGeometry args={[0.28, 24, 24]} />
+          <meshBasicMaterial color="#ffdc68" transparent opacity={0.28} depthWrite={false} />
+        </mesh>
+      )}
       <sphereGeometry args={[0.28, 24, 24]} />
       <meshStandardMaterial
         color={DESIGNS[entry.design]?.color || "#b58aff"}
@@ -125,12 +132,13 @@ function CameraDirector({ leaderPositions, enabled }: {
 }
 
 export default function RaceScene({
-  entries, frame, autoFollow = true,
+  entries, frame, autoFollow = true, myEntryId,
 }: {
   entries: Entry[];
   roundId: number;
   frame: RaceFrame | null;
   autoFollow?: boolean;
+  myEntryId?: string | null;
 }) {
   const marblesById = useMemo(
     () => new Map(frame?.marbles.map((marble) => [marble.id, marble]) || []),
@@ -166,7 +174,7 @@ export default function RaceScene({
         <MarbleVisual
           key={entry.id}
           entry={entry}
-          index={index}
+          index={index} highlighted={entry.id === myEntryId}
           sample={marblesById.get(entry.id)}
         />
       ))}
