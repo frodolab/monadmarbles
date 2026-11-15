@@ -306,7 +306,7 @@ function updatePodiumText(sprite,text,color='#ffffff',fontSize=48){
  sprite.material.map.needsUpdate=true;
 }
 function actualPrizeLabel(){
- if(pendingOfficial?.paidMode && /^\\d+$/.test(String(pendingOfficial.poolWei||''))){
+ if(pendingOfficial?.paidMode && /^\d+$/.test(String(pendingOfficial.poolWei||''))){
   const total=BigInt(pendingOfficial.poolWei),scale=10n**18n;
   const whole=total/scale;
   const fraction=String(total%scale).padStart(18,'0').slice(0,4).replace(/0+$/,'');
