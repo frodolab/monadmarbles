@@ -114,6 +114,10 @@ ui.fill = async (pin, count) => {
 };
 ui.start = async pin => {
   try {
+    // Never run a paid-looking V27 animation against the legacy short-track engine.
+    if (room?.course !== 'v27') {
+      throw new Error('The sandbox backend is still running the legacy track. Start is blocked until RACE_COURSE=v27 is deployed.');
+    }
     await ack('lobby:start', { pin }, 145000);
     notify('Server accepted start · synchronized ten-second countdown');
     return true;
@@ -183,6 +187,11 @@ socket.on('lobby:state', next => {
   room = next;
   ui.setConnected(true);
   ui.applyRoom(room, wallet);
+  if (next.course !== 'v27') {
+    status.textContent = 'V27 SANDBOX · Backend course mismatch — start disabled';
+    document.getElementById('start').disabled = true;
+    return;
+  }
   if (next.phase === 'countdown') status.textContent = 'V27 SANDBOX · Synchronized countdown';
   else if (next.phase === 'racing') status.textContent = 'V27 SANDBOX · Live shared round · V27 visual simulation';
   else if (next.phase === 'finished') status.textContent = 'V27 SANDBOX · Official winner declared · no payouts';
