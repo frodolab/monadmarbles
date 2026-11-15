@@ -105,3 +105,20 @@ body[data-theme="castle"] #scene::before{opacity:.11}
  .panel h2{font-size:14px}.camera-ui{top:315px;max-width:140px}
  .finish{padding:10px 7px}.podium-header>small{font-size:8px}
 }
+
+/* Responsive spectator HUD; debug badge removed */
+.status{display:none!important}
+.panel{max-width:calc(100vw - 20px)}
+@media(max-width:900px){.panel.left{top:122px;left:8px;width:min(195px,31vw);padding:10px}.panel.right{top:122px;right:8px;width:min(185px,32vw);padding:10px}.camera-ui{top:auto!important;bottom:calc(15px + env(safe-area-inset-bottom));right:8px}.pool{top:52px;max-width:55vw}}
+@media(max-width:600px){
+ .logo.clean-race-logo{font-size:clamp(15px,4.4vw,22px)!important;max-width:90vw;left:8px;top:calc(7px + env(safe-area-inset-top))}
+ .pool{top:calc(42px + env(safe-area-inset-top));min-width:0;max-width:min(56vw,230px);padding:5px 7px}
+ .pool strong{font-size:clamp(17px,5vw,28px)!important}.pool small{font-size:9px!important;letter-spacing:0}
+ .panel.left{top:calc(112px + env(safe-area-inset-top));left:7px;width:min(37vw,154px);padding:8px}
+ .panel.right{top:calc(112px + env(safe-area-inset-top));right:7px;width:min(37vw,154px);padding:8px;max-height:38svh;overflow:auto}
+ .panel h2{font-size:clamp(10px,2.8vw,14px)}.panel .muted{font-size:10px}
+ .camera-ui{top:auto!important;bottom:calc(55px + env(safe-area-inset-bottom));right:6px;max-width:145px;padding:5px}
+ .camera-ui select{max-width:128px;font-size:11px}
+ .finish{padding:10px 7px;overflow-y:auto}.podium-header h1{font-size:clamp(30px,8vw,48px)}.winnings strong{font-size:clamp(32px,8vw,50px)}
+}
+@media(max-height:530px) and (min-width:650px){.panel.left,.panel.right{top:74px;max-height:40vh;overflow:auto}.camera-ui{top:auto!important;bottom:7px}.pool{top:8px}}
