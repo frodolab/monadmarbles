@@ -305,6 +305,15 @@ function updatePodiumText(sprite,text,color='#ffffff',fontSize=48){
  ctx.fillText(String(text).slice(0,24),canvas.width/2,canvas.height/2,canvas.width-36);
  sprite.material.map.needsUpdate=true;
 }
+function actualPrizeLabel(){
+ if(pendingOfficial?.paidMode && /^\\d+$/.test(String(pendingOfficial.poolWei||''))){
+  const total=BigInt(pendingOfficial.poolWei),scale=10n**18n;
+  const whole=total/scale;
+  const fraction=String(total%scale).padStart(18,'0').slice(0,4).replace(/0+$/,'');
+  return whole.toString()+(fraction?'.'+fraction:'')+' TESTNET MON';
+ }
+ return (players.length*ENTRY).toFixed(1)+(pendingOfficial?.paidMode?' TESTNET MON':' DEMO MON');
+}
 function showPodium(){
  preparePodium();
  for(const slot of podiumSlots){
@@ -314,7 +323,7 @@ function showPodium(){
    slot.marble.material.map=marbleTextures[racer.colorIndex];
    updatePodiumText(slot.name,racer.name,slot.place===1?'#ffef9a':'#ffffff');}
  }
- if(podiumPrize)updatePodiumText(podiumPrize,'✦ '+(players.length*ENTRY).toFixed(1)+' MON ✦','#ead393',53);
+ if(podiumPrize)updatePodiumText(podiumPrize,'✦ '+actualPrizeLabel()+' ✦','#ead393',45);
  podiumGroup.visible=true;
  podiumVisible=true;
  podiumTransitionStart=performance.now();
@@ -327,7 +336,7 @@ function showPodium(){
   const racer=finished[place-1];
   return `<div class="podium-label ${place===1?'podium-first':''}"><span>${['🥇','🥈','🥉'][place-1]} ${place===1?'OFFICIAL WINNER':place===2?'OFFICIAL RUNNER UP':'OFFICIAL THIRD'}</span><strong>${racer?escapeHTML(racer.name):'—'}</strong></div>`;
  }).join('');
- $('#winningAmount').textContent=(players.length*ENTRY).toFixed(1)+' DEMO MON';
+ $('#winningAmount').textContent=actualPrizeLabel();
  $('#finish').style.display='flex';
  document.body.classList.add('show-podium');
 }
