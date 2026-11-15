@@ -676,6 +676,11 @@ let devToken=null;
 const stage=document.querySelector('.stage');
 async function requestDev(path,payload,token=devToken){
  try{
+  if(window.MonadMarblesPreviewBridge?.connected){
+    if(path==='unlock') return {ok:true,token:String(payload.pin||'')};
+    if(path==='logout') return {ok:true};
+    if(path==='action') return {ok:true};
+  }
   const response=await fetch('/api/dev/'+path,{method:'POST',credentials:'omit',
    headers:{'Content-Type':'application/json',...(token?{'Authorization':'Bearer '+token}:{})},
    body:JSON.stringify(payload),cache:'no-store'});
@@ -806,9 +811,9 @@ function raceHandoff(){
  const selectedTheme=document.querySelector('.stage').dataset.theme||'candy';
  return {
   version:25,theme:selectedTheme,localPreview:true,
-  viewerMarbleId:myMarble?'lobby-'+myMarble.id:null,
+  viewerMarbleId:myMarble?(myMarble.serverId||'lobby-'+myMarble.id):null,
   participants:entrants.map(p=>({
-   id:'lobby-'+p.id, username:p.name, marbleDesign:p.index,
+   id:p.serverId||('lobby-'+p.id), username:p.name, marbleDesign:p.index,
    color:p.color, isBot:p!==myMarble, walletAddress:p===myMarble?mockAddress:null
   }))
  };
@@ -882,7 +887,7 @@ window.addEventListener('message',event=>{
  if(event.origin!==location.origin||event.source!==raceFrame.contentWindow)return;
  if(event.data?.type==='monadmarbles:race-ready'){
   if(!raceTransitioning)return;
-  raceFrameReady=true;$('raceLoadingNote').hidden=true;tryReveal();
+  raceFrameReady=true;$('raceLoadingNote').hidden=true;tryReveal();if(window.MonadMarblesPreviewBridge?.pendingResult)raceFrame.contentWindow.postMessage({type:'monadmarbles:official-result',...window.MonadMarblesPreviewBridge.pendingResult},location.origin);
  }else if(event.data?.type==='monadmarbles:race-error'){
   abortRace('Could not initialize the 3D race. '+String(event.data.message||''));
  }else if(event.data?.type==='monadmarbles:race-finished'){
@@ -956,7 +961,7 @@ if(preRaceActive){
  const dtSecs=Math.max(0,(ts-preRaceLastTs)/1000);preRaceLastTs=ts;
  preRaceRemaining=Math.max(0,preRaceRemaining-dtSecs);
  const n=Math.max(0,Math.ceil(preRaceRemaining));$('preRaceNumber').textContent=String(n);
- if(preRaceRemaining<=0)finishPreRaceCountdown();
+ if(preRaceRemaining<=0&&!window.MonadMarblesPreviewBridge?.connected)finishPreRaceCountdown();
 }
 ctx.clearRect(0,0,1000,620);if(raceActive){requestAnimationFrame(frame);return}let wave=ts*.00055;
 const cx=505, rimY=182, rimRx=330, rimRy=88, bodyBottom=526;
@@ -1064,7 +1069,71 @@ ellipse(cx,rimY+4,314,74,null,'#7f6cc6b8',3);
 for(let j=0;j<8;j++){const xx=190+j*92,yy=100+22*Math.sin(j*4.3+wave*8);const a=.38+.38*Math.sin(wave*3+j);ctx.strokeStyle=`rgba(255,255,255,${a})`;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(xx-5,yy);ctx.lineTo(xx+5,yy);ctx.moveTo(xx,yy-5);ctx.lineTo(xx,yy+5);ctx.stroke()}
 requestAnimationFrame(frame)}timeUI();update();requestAnimationFrame(frame);
 // Read-only local preview handoff; developer mutations require the PIN-backed API.
+let syncedRaceKey=null;
+window.MonadMarblesPreviewBridge={
+ connected:false,pendingResult:null,liveRoom:null,
+ getSelectedDesign(){return selected},
+ getOperatorPin(){return devToken||''},
+ toast,
+ setConnected(yes){if(!yes)$('start').disabled=true;},
+ setWallet(address){mockAddress=address;if(!address){myMarble=null;return;}const p=entrants.find(x=>x.wallet?.toLowerCase()===address.toLowerCase()||x.name.toLowerCase()===(address.slice(0,6)+'…'+address.slice(-4)).toLowerCase());if(p){myMarble=p;syncPlayerPreview()}},
+ applyRoom(next,wallet){
+  if(!next)return;
+  this.liveRoom=next;
+  const key=String(next.sessionId||'')+'-'+String(next.raceId||'');
+  if(syncedRaceKey!==key){
+   if(syncedRaceKey)resetPreview();
+   syncedRaceKey=key;this.pendingResult=null;
+  }
+  const incoming=next.entries||[];
+  if(!finished&&next.phase!=='racing'&&next.phase!=='finished'){
+   for(const entry of incoming){
+    let p=entrants.find(x=>x.serverId===entry.id);
+    if(!p){
+      p=add(entry.nickname||'Racer',Number(entry.design||0)%colors.length);
+      if(!p)break;
+      p.serverId=entry.id;p.wallet=entry.wallet||null;
+    }else{p.name=entry.nickname||p.name;}
+   }
+  }
+  if(wallet){
+   mockAddress=wallet;
+   myMarble=entrants.find(x=>x.wallet?.toLowerCase()===wallet.toLowerCase() || x.name.toLowerCase()===(wallet.slice(0,6)+'…'+wallet.slice(-4)).toLowerCase())||null;
+   if(myMarble){$('playerEditor').hidden=false;syncPlayerPreview()}
+  }
+  const isLobby=next.phase==='lobby';
+  const isCountdown=next.phase==='countdown';
+  $('join').disabled=!isLobby||Boolean(myMarble)||incoming.length>=next.maxPlayers;
+  $('join').textContent=myMarble?'✓ ENTERED':'✦ CONNECT & JOIN PREVIEW ✦';
+  $('start').disabled=!isLobby||incoming.length<2;
+  $('addOne').disabled=!isLobby;$('addTen').disabled=!isLobby;
+  $('count').textContent=String(incoming.length);
+  document.querySelector('.entrants-count').lastChild.textContent=' / '+next.maxPlayers+' ENTRIES';
+  $('pool').textContent=(incoming.length*Number(next.demoEntryFee||0.1)).toFixed(1);
+  if(isCountdown&&!raceActive){
+    running=false;finished=true;preRaceActive=true;preRaceLastTs=performance.now();
+    preRaceRemaining=Math.max(0,(Number(next.startsAt||0)-Number(next.serverTime||Date.now()))/1000);
+    $('preRaceCountdown').hidden=false;stage.classList.add('pre-race');
+    $('preRaceNumber').textContent=String(Math.ceil(preRaceRemaining));
+  }
+  if((next.phase==='racing'||next.phase==='finished')&&!raceActive&&!raceTransitioning){
+    preRaceActive=false;stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;beginRace();
+  }
+  if(next.phase==='finished'&&next.winnerId){this.setOfficialResult({winnerId:next.winnerId,finishOrder:next.finishOrder||[]});}
+  update();
+  $('pool').textContent=(incoming.length*Number(next.demoEntryFee||0.1)).toFixed(1);
+  $('count').textContent=String(incoming.length);
+  $('join').disabled=!isLobby||Boolean(myMarble)||incoming.length>=next.maxPlayers;
+  $('start').disabled=!isLobby||incoming.length<2;
+ },
+ setFrame(frame){this.lastFrame=frame;},
+ setOfficialResult(result){
+  this.pendingResult=result;
+  if(raceFrame?.contentWindow&&raceFrameReady)raceFrame.contentWindow.postMessage({type:'monadmarbles:official-result',...result},location.origin);
+ },
+};
 window.MonadMarblesLobby={getParticipants(){return entrants.map(p=>({nickname:p.name,marbleDesign:p.index,marbleId:p.id}))},getState(){return {registrationOpen:!finished,preRaceActive,secondsRemaining:remaining,entrants:entrants.length}}};
 })();
 </script>
+<script type="module" src="/src/live.js"></script>
 </body></html>
