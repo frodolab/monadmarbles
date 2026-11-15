@@ -294,6 +294,12 @@ contract MonadMarbles {
         address previousOwner = owner;
         owner = pendingOwner;
         pendingOwner = address(0);
+        // When the former owner was also the settler, revoke settlement
+        // authority during ownership transfer rather than leaving stale access.
+        if (settler == previousOwner) {
+            settler = owner;
+            emit SettlerChanged(previousOwner, owner);
+        }
         emit OwnershipTransferred(previousOwner, owner);
     }
 

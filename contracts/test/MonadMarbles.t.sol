@@ -297,6 +297,7 @@ contract MonadMarblesTest {
         vm.prank(ALICE);
         game.acceptOwnership();
         require(game.owner() == ALICE, "owner was not updated");
+        require(game.settler() == ALICE, "old owner still has settlement access");
 
         vm.expectRevert(MonadMarbles.Unauthorized.selector);
         game.createRace(FEE, 48);

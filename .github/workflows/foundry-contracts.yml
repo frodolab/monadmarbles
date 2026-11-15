@@ -29,3 +29,14 @@ jobs:
       - name: Run contract tests
         working-directory: contracts
         run: forge test -vv
+      - name: Export contract ABI for frontend and backend integration
+        working-directory: contracts
+        run: |
+          mkdir -p abi
+          forge inspect src/MonadMarbles.sol:MonadMarbles abi --json > abi/MonadMarbles.json
+      - name: Upload ABI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonadMarbles-ABI
+          path: contracts/abi/MonadMarbles.json
+          retention-days: 14
