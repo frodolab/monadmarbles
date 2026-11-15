@@ -1,7 +1,7 @@
 name: Web and server regression
 on:
   push:
-    branches: [beta, feature/monad-testnet-contracts, feature/monad-auto-payout]
+    branches: [beta, feature/monad-testnet-contracts, feature/monad-auto-payout, feature/pin-only-race-start]
   pull_request:
     branches: [main, beta]
 

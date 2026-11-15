@@ -7,6 +7,7 @@ export default defineConfig({
     allowedHosts: [
       "monadmarbles-production.up.railway.app",
       "monadmarbles-testnet-web-production.up.railway.app",
+      "monadmarbles.up.railway.app",
     ],
   },
 });
