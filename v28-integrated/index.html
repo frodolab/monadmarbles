@@ -707,7 +707,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!themeMenu.hidden){
  let context=null,gain=null,loop=null,beat=0,lastBounce=0;
  let level=Number(localStorage.getItem('mm-audio-volume')??24);
  if(!Number.isFinite(level)||level<0||level>100)level=24;
- let muted=localStorage.getItem('mm-audio-muted')!=='false';range.value=String(level);
+ let muted=localStorage.getItem('mm-audio-muted')==='true';range.value=String(level);
  function update(){mute.textContent=muted||level===0?'🔇':'🔊';mute.setAttribute('aria-label',muted?'Unmute sound':'Mute sound');if(gain)gain.gain.setTargetAtTime(muted?0:level/100*.3,context.currentTime,.05)}
  function ensure(){if(!context){const C=window.AudioContext||window.webkitAudioContext;if(!C)return false;context=new C;gain=context.createGain();gain.gain.value=0;gain.connect(context.destination);update()}if(context.state==='suspended')context.resume().catch(()=>{});if(!loop)loop=setInterval(music,390);return true}
  function note(hz,duration=.20,volume=.12,kind='sine',delay=0){if(!context||muted||!level)return;const t=context.currentTime+delay,osc=context.createOscillator(),env=context.createGain();osc.type=kind;osc.frequency.value=hz;env.gain.setValueAtTime(.0001,t);env.gain.exponentialRampToValueAtTime(Math.max(.001,volume),t+.02);env.gain.exponentialRampToValueAtTime(.0001,t+duration);osc.connect(env);env.connect(gain);osc.start(t);osc.stop(t+duration+.02)}
@@ -721,7 +721,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!themeMenu.hidden){
  else if(type==='win'){[523,659,784,1046].forEach((n,i)=>note(n,.6,.13,'triangle',i*.15))}
  else if(type==='ui')note(660,.10,.08)}
  mute.addEventListener('click',()=>{muted=!muted;localStorage.setItem('mm-audio-muted',String(muted));ensure();update();if(!muted)sfx('ui')});
- range.addEventListener('input',()=>{level=Number(range.value);if(level&&!(!muted))muted=false;localStorage.setItem('mm-audio-volume',String(level));localStorage.setItem('mm-audio-muted',String(muted));ensure();update()});
+ range.addEventListener('input',()=>{level=Number(range.value);if(level>0)muted=false;localStorage.setItem('mm-audio-volume',String(level));localStorage.setItem('mm-audio-muted',String(muted));ensure();update()});
  document.addEventListener('pointerdown',()=>{if(!muted)ensure()},{once:true});document.addEventListener('keydown',()=>{if(!muted)ensure()},{once:true});
  window.MonadMarblesAudio={sfx,ensure};update();
 })();
@@ -803,12 +803,12 @@ function bot(count){if(finished||preRaceActive)return;let added=0;for(let i=0;i<
 let preRaceActive=false,preRaceRemaining=10,preRaceLastTs=0;
 function beginPreRaceCountdown(){
  if(preRaceActive||raceActive||raceTransitioning)return;
- running=false;finished=true;remaining=0;preRaceActive=true;preRaceRemaining=10;preRaceLastTs=performance.now();
+ running=false;finished=true;remaining=0;preRaceActive=true;preRaceRemaining=10;preRaceLastTs=performance.now();lastPreRaceAudioSecond=-1;
  $('registrationTimer').classList.remove('warning');
  $('preRaceCountdown').hidden=false;stage.classList.add('pre-race');
  $('preRaceNumber').textContent='10';
  closeModal();$('join').disabled=true;
- timeUI();toast('Registration closed — race starts in 10!');window.MonadMarblesAudio?.sfx('tick');
+ timeUI();toast('Registration closed — race starts in 10!');
 }
 function finishPreRaceCountdown(){
  if(!preRaceActive)return;
@@ -987,8 +987,11 @@ function resetPreview(){
 $('instantStart').onclick=async()=>{
  if(await authorizedDevAction('race:now')){running=false;preRaceActive=false;stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;$('registrationTimer').classList.remove('warning');beginRace()}
 };
+let lastWarningAudioSecond=-1,lastPreRaceAudioSecond=-1;
 function timeUI(){
  const seconds=Math.max(0,Math.ceil(remaining));
+ if(running&&seconds<=5&&seconds>=1&&seconds!==lastWarningAudioSecond){lastWarningAudioSecond=seconds;window.MonadMarblesAudio?.sfx('tick')}
+ if(seconds>5)lastWarningAudioSecond=-1;
  $('time').textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
  $('time').dataset.label=$('time').textContent;
  $('registrationTimer').classList.toggle('warning',running&&!finished&&seconds>=1&&seconds<=5);
@@ -1022,7 +1025,7 @@ function frame(ts){let dt=Math.min(.04,(ts-tPrevious)/1000||0);tPrevious=ts;if(r
 if(preRaceActive){
  const dtSecs=Math.max(0,(ts-preRaceLastTs)/1000);preRaceLastTs=ts;
  preRaceRemaining=Math.max(0,preRaceRemaining-dtSecs);
- const n=Math.max(0,Math.ceil(preRaceRemaining));$('preRaceNumber').textContent=String(n);
+ const n=Math.max(0,Math.ceil(preRaceRemaining));$('preRaceNumber').textContent=String(n);if(n>=1&&n!==lastPreRaceAudioSecond){lastPreRaceAudioSecond=n;window.MonadMarblesAudio?.sfx(n<=3?'tick':'ui')}
  if(preRaceRemaining<=0)finishPreRaceCountdown();
 }
 ctx.clearRect(0,0,1000,620);if(raceActive){requestAnimationFrame(frame);return}let wave=ts*.00055;
