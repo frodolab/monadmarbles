@@ -21,9 +21,9 @@ const chain = defineChain({
   blockExplorers: { default: { name: 'Monad Explorer', url: 'https://testnet.monadexplorer.com' } },
   testnet: true,
 });
-const rpcUrl = import.meta.env.VITE_MONAD_RPC_URL || 'https://testnet-rpc.monad.xyz';
+const rpcUrl = import.meta.env?.VITE_MONAD_RPC_URL || 'https://testnet-rpc.monad.xyz';
 const publicClient = createPublicClient({ chain, transport: http(rpcUrl, { retryCount: 2, timeout: 18000 }) });
-const pinnedContract = String(import.meta.env.VITE_MONAD_MARBLES_ADDRESS || '').trim().toLowerCase();
+const pinnedContract = String(import.meta.env?.VITE_MONAD_MARBLES_ADDRESS || '').trim().toLowerCase();
 const pendingKey = 'monad-marbles-v27-pending-paid-entry-v1';
 const txRegex = /^0x[0-9a-fA-F]{64}$/;
 const addressRegex = /^0x[0-9a-fA-F]{40}$/;
@@ -41,7 +41,7 @@ export function formatWei(wei, digits = 4) {
   } catch { return '?'; }
 }
 
-export function validateOnchainRoom(room, forJoin = false) {
+export function validateOnchainRoom(room, forJoin = false, expectedContract = pinnedContract) {
   if (!room || room.demoOnly !== false || room.blockchain?.mode !== 'onchain') {
     throw new Error('This room is in FREE preview mode, not paid Monad Testnet mode.');
   }
@@ -50,7 +50,7 @@ export function validateOnchainRoom(room, forJoin = false) {
   if (Number(b.chainId) !== 10143) throw new Error('Backend chain is not Monad Testnet (10143).');
   const contract = String(b.contractAddress || '').toLowerCase();
   if (!addressRegex.test(contract)) throw new Error('Backend has not advertised a valid V2 contract.');
-  if (!addressRegex.test(pinnedContract) || contract !== pinnedContract) {
+  if (!addressRegex.test(expectedContract) || contract !== expectedContract) {
     throw new Error('Frontend V2 contract is not pinned to the same address as the backend. Payments are locked.');
   }
   if (!b.autoPayoutEnabled) {
