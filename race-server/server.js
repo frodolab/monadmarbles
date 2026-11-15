@@ -116,7 +116,8 @@ function snapshot() {
     demoEntryFee,
     demoOnly: !paidMode,
     blockchain: chainAdmission ? chainAdmission.snapshot : null,
-    payout: room.payout || null,
+    // Advertise V2 automatic payouts even before the first race exists.
+    payout: room.payout || (autoSettler ? autoSettler.summary() : null),
     authoritativePhysics: true,
     serverTime: Date.now(),
   };
@@ -433,6 +434,15 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     console.log("On-chain admission enabled: demo join/reset/fill disabled and race start requires contract close.");
   }
   if (autoSettler) {
+    // Test the ACTUAL Railway signer on startup, without spending gas or
+    // trusting the presence of an environment-variable name as readiness.
+    void autoSettler.assertReady().then(({ settlerAddress }) => {
+      console.log("V2 automatic settlement ready; authorized relayer:", settlerAddress);
+      broadcast();
+    }).catch(error => {
+      console.error("V2 auto-payout readiness blocked:", error.message);
+      broadcast();
+    });
     const settle = () => autoSettler.tick().catch(error =>
       console.error("Auto-payout poll failed:", error.message));
     void settle();

@@ -68,10 +68,17 @@ function createAutoSettler({
   onUpdate = () => {},
 } = {}) {
   const contractAddress = env.MONAD_CONTRACT_ADDRESS;
-  const privateKey = env.MONAD_SETTLER_PRIVATE_KEY;
+  // MetaMask exports either 64 hex digits or 0x-prefixed hex. Permit both
+  // forms, optional whitespace and quoted Railway dashboard paste values.
+  // Never log this value, even if it fails validation.
+  const suppliedKey = typeof env.MONAD_SETTLER_PRIVATE_KEY === "string"
+    ? env.MONAD_SETTLER_PRIVATE_KEY.trim().replace(/^["']|["']$/g, "").trim() : "";
+  const privateKey = /^[0-9a-fA-F]{64}$/.test(suppliedKey)
+    ? "0x" + suppliedKey : suppliedKey;
   const directory = env.MONAD_SETTLEMENT_DIR;
   assertValue(addressRegex.test(contractAddress || ""), "Automatic settlement requires a valid MONAD_CONTRACT_ADDRESS.");
-  assertValue(keyRegex.test(privateKey || ""), "Automatic settlement requires MONAD_SETTLER_PRIVATE_KEY.");
+  assertValue(keyRegex.test(privateKey || ""),
+    "MONAD_SETTLER_PRIVATE_KEY must contain one 32-byte MetaMask account private key (64 hexadecimal characters, with optional 0x).");
   assertValue(directory && path.isAbsolute(directory), "MONAD_SETTLEMENT_DIR must be an absolute mounted volume directory.");
   if (env.RAILWAY_ENVIRONMENT && !directory.startsWith("/data")) {
     throw new Error("Railway auto-payout requires a dedicated /data-mounted volume for durable winner records.");
@@ -165,6 +172,7 @@ function createAutoSettler({
   }
 
   async function assertReady() {
+    try {
     const chainId = await client.getChainId();
     assertValue(chainId === CHAIN_ID, "Settlement RPC is not Monad Testnet.");
     const bytecode = await client.getBytecode({ address: contractAddress });
@@ -184,6 +192,12 @@ function createAutoSettler({
     readiness = "ready";
     lastError = null;
     return { chainId, contractAddress: lowerContract, settlerAddress: account.address };
+    } catch (error) {
+      readiness = "error";
+      lastError = error instanceof Error ? error.message : "Settlement readiness RPC failure.";
+      onUpdate(summary());
+      throw error;
+    }
   }
 
   async function _reconcile(row) {

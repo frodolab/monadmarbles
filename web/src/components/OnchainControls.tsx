@@ -48,8 +48,11 @@ export function PaidEntryControls({
     catch { return "1"; }
   });
   const chain = room.blockchain;
+  // Do not let a user pay a V2 entrance fee if the relayer or RPC cannot
+  // perform the mandatory automatic winner payout.
+  const settlementReady = !room.payout?.enabled || room.payout.readiness === "ready";
   const ready = connected && chain?.status === "open" && chain.synced &&
-    Boolean(chain.chainRaceId) && Boolean(walletAddress);
+    Boolean(chain.chainRaceId) && Boolean(walletAddress) && settlementReady;
   const fee = chain?.entryFeeWei ? formatEther(BigInt(chain.entryFeeWei)) : "?";
 
   function store(value: Pending | null) {
@@ -141,6 +144,9 @@ export function PaidEntryControls({
         onClick={() => void join()}
       >PAY {fee} TESTNET MON & JOIN RACE</button>
       <p className="fine-print">Payment goes to the contract, never to the race server. Only verified blockchain events create marbles.</p>
+      {room.payout?.enabled && room.payout.readiness !== "ready" && (
+        <p className="fine-print" role="status">Automatic payout is temporarily unavailable. New paid entries are locked until the server's settlement wallet passes its security checks.</p>
+      )}
       {pending && (
         <div className="pending-entry">
           <small>TX SENT · VERIFICATION MAY BE RETRIED WITHOUT PAYING AGAIN</small>
@@ -176,6 +182,7 @@ export function PaidOperatorControls({
   const [notice, setNotice] = useState("");
   const chain = room.blockchain;
   const hasRace = Boolean(chain?.chainRaceId);
+  const settlementReady = !room.payout?.enabled || room.payout.readiness === "ready";
 
   async function create() {
     if (!walletAddress || chain?.status !== "waiting") return;
@@ -242,12 +249,12 @@ export function PaidOperatorControls({
     <div className="onchain-operator-controls">
       {chain?.status === "waiting" && (
         <button className="secondary-button" type="button"
-          disabled={busy || !connected || !walletAddress}
+          disabled={busy || !connected || !walletAddress || !settlementReady}
           onClick={() => void create()}>CREATE ON-CHAIN RACE · 0.1 MON · 48 SLOTS</button>
       )}
       {hasRace && (
         <button className="primary-button" type="button"
-          disabled={busy || !connected || !walletAddress || !operatorPin ||
+          disabled={busy || !connected || !walletAddress || !operatorPin || !settlementReady ||
             room.phase !== "lobby" || room.entries.length < 2 ||
             !chain?.synced || (chain.status !== "open" && !chain.canStart)}
           onClick={() => void begin()}>

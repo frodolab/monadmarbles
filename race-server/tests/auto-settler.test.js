@@ -64,6 +64,17 @@ async function main() {
       walletClient: chain.walletClient, onUpdate: status => events.push(status),
     });
     const settler = create();
+    const noPrefix = createAutoSettler({
+      env: { ...envConfig(directory), MONAD_SETTLER_PRIVATE_KEY: "22".repeat(32) },
+      publicClient: chain.publicClient, walletClient: chain.walletClient,
+    });
+    assert.equal(noPrefix.settlerAddress,owner);
+    const pastedQuoted = createAutoSettler({
+      env: { ...envConfig(directory), MONAD_SETTLER_PRIVATE_KEY: " \\"" + privateKey + "\\" " },
+      publicClient: chain.publicClient, walletClient: chain.walletClient,
+    });
+    assert.equal(pastedQuoted.settlerAddress,owner);
+    console.log("PASS MetaMask/Railway private key paste format compatibility");
     const race = {
       chainRaceId:"1", winnerId:"chain-1-1",
       entries:[{id:"chain-1-1",entryId:"1",wallet:owner,source:"chain"}],
