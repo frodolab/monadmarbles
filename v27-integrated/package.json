@@ -1,0 +1,19 @@
+{
+  "name": "monad-marbles-v27-integrated-patterned-dev-countdowns",
+  "version": "27.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node tools/start-dev.mjs",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "server": "node server/dev-server.mjs",
+    "test:security": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.17.3",
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5"
+  }
+}
