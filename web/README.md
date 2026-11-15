@@ -1,40 +1,50 @@
-# Monad Marbles — Beta 1
+# Monad Marbles — Beta 2
 
-This is the **first local 3D physics prototype**. It has eight colored marbles, a sloped obstacle track, a finish-line sensor, and a restart button. The first marble across the line is reported as the winner.
+A shared **demo** marble-registration lobby and local 3D physics preview.
 
-This beta does **not** yet use wallets, Monad transactions, a shared race server, prize pools, or network synchronization.
+- Players select a nickname and marble color, then add a **simulated** entry.
+- Marble models drop into a transparent 3D bowl.
+- With the race server connected, all browsers see the same participant list, shared operator start, and countdown.
+- Operator can add eight demo marbles, manually start, and reset rounds.
+- Race physics is still **local to each browser**. Results are not authoritative and there is no smart contract integration, entry payment, or prize payout yet.
+- No real or testnet cryptocurrency is accepted by this beta; the displayed pool is illustrative.
 
-## Local setup
+## Run locally (two terminals)
 
-Install Node.js 22.12+ (or a compatible current Node LTS). On Windows PowerShell use `npm.cmd` if `npm.ps1` is blocked by execution policy.
+```sh
+cd race-server
+npm install
+npm start
+```
 
-```powershell
+```sh
 cd web
-npm.cmd install
-npm.cmd run dev
+npm install
+npm run dev
 ```
 
-Open the printed local address (normally `http://localhost:5173`). Drag to rotate the camera and scroll to zoom.
+On Windows PowerShell use `npm.cmd` instead of `npm` if execution-policy restrictions block `npm.ps1`. Vite defaults to `http://localhost:3001` for the shared server during development. If it's not running, the UI falls back to clearly labeled local-only demo mode.
 
-## Build verification
+Build check:
 
-```powershell
-npm.cmd run build
+```sh
+cd web
+npm run build
 ```
 
-## Railway beta deployment
+## Railway deployment (two services, same GitHub beta branch)
 
-- Create a Railway service from the repository's `beta` branch.
-- Set root directory to `/web`.
-- Build command: `npm run build`.
-- Start command: `npm run start`.
-- Generate a public domain under Networking.
+1. Existing **frontend**: root `/web`, build `npm run build`, start `npm run start`.
+2. New **race-server**: root `/race-server`, start `npm start`, one replica, disable Serverless/App Sleeping, and generate a public domain.
+3. On the **race-server**, set `WEB_ORIGIN=https://monadmarbles-production.up.railway.app` and `OPERATOR_PIN` to a **private** PIN.
+4. On the **frontend**, set `VITE_RACE_SERVER_URL=https://YOUR-RACE-SERVER.up.railway.app`. Apply/redeploy: Vite reads this at build time.
+5. Test the link from two devices. The top-right indicator should say **SHARED LOBBY LIVE**.
+6. Operator enters the private PIN in the frontend controls; never expose the PIN as a frontend environment variable.
 
-The `start` script uses Vite preview to serve this **demo** build. Use a dedicated static-file server or static hosting for production.
+The service stores demo state only in memory. A redeploy/restart resets the lobby; a multi-replica setup would create conflicting rooms. This is a hackathon prototype, not secure entry processing or prize settlement.
 
-## Next milestones
+The frontend uses Vite preview to serve the demo build. For longer-term production, use a dedicated static hosting server.
 
-1. Replace demo-only rigid-body simulation with an authoritative race engine.
-2. Add the player lobby, bowl and entry UI.
-3. Stream official race snapshots to all spectator browsers.
-4. Connect confirmed Monad Testnet entrants and winner recording.
+## Next: Beta 3
+
+Move physics into one authoritative server, stream identical marble trajectories to all spectators, and verify an agreed first-place result.

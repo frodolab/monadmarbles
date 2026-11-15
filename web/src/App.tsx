@@ -1,212 +1,234 @@
-import { useCallback, useState } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import {
-  CuboidCollider,
-  CylinderCollider,
-  Physics,
-  RigidBody,
-} from "@react-three/rapier";
-
-const MARBLES = [
-  { id: "01", color: "#a77cff", label: "Violet" },
-  { id: "02", color: "#ffae57", label: "Orange" },
-  { id: "03", color: "#54d9ec", label: "Cyan" },
-  { id: "04", color: "#fa668e", label: "Rose" },
-  { id: "05", color: "#c8f16b", label: "Lime" },
-  { id: "06", color: "#ffe07a", label: "Gold" },
-  { id: "07", color: "#6f89ff", label: "Blue" },
-  { id: "08", color: "#64e4ba", label: "Mint" },
-] as const;
-
-const TRACK_TILT = -0.22;
-const BUMPERS = [
-  { x: -1.7, z: 2.2 },
-  { x: 0.1, z: 1.0 },
-  { x: 1.8, z: -0.3 },
-  { x: -1.0, z: -2.1 },
-  { x: 1.0, z: -3.7 },
-];
-
-function MarbleBodies() {
-  return (
-    <>
-      {MARBLES.map((marble, i) => {
-        const row = Math.floor(i / 4);
-        const column = i % 4;
-        return (
-          <RigidBody
-            key={marble.id}
-            name={`marble-${marble.id}`}
-            colliders="ball"
-            position={[-2.1 + column * 1.4, 3.25 + row * 0.12, 5.2 + row * 1.1]}
-            friction={0.55}
-            restitution={0.28}
-            linearDamping={0.04}
-            angularDamping={0.04}
-            ccd
-          >
-            <mesh castShadow>
-              <sphereGeometry args={[0.32, 28, 28]} />
-              <meshStandardMaterial
-                color={marble.color}
-                metalness={0.16}
-                roughness={0.15}
-              />
-            </mesh>
-          </RigidBody>
-        );
-      })}
-    </>
-  );
-}
-
-function Track({ onFinish }: { onFinish: (id: string) => void }) {
-  return (
-    <RigidBody type="fixed" colliders={false} rotation={[TRACK_TILT, 0, 0]}>
-      <CuboidCollider args={[3.1, 0.15, 8]} position={[0, -0.15, 0]} />
-      <mesh receiveShadow position={[0, -0.15, 0]}>
-        <boxGeometry args={[6.2, 0.3, 16]} />
-        <meshStandardMaterial color="#6952cf" roughness={0.72} />
-      </mesh>
-
-      {[-3.0, 3.0].map((x) => (
-        <group key={x}>
-          <CuboidCollider
-            args={[0.17, 0.5, 8]}
-            position={[x, 0.43, 0]}
-          />
-          <mesh castShadow receiveShadow position={[x, 0.43, 0]}>
-            <boxGeometry args={[0.34, 1, 16]} />
-            <meshStandardMaterial color="#a99bfa" roughness={0.45} />
-          </mesh>
-        </group>
-      ))}
-
-      {BUMPERS.map(({ x, z }, index) => (
-        <group key={index}>
-          <CylinderCollider args={[0.39, 0.38]} position={[x, 0.39, z]} />
-          <mesh castShadow receiveShadow position={[x, 0.39, z]}>
-            <cylinderGeometry args={[0.38, 0.38, 0.78, 24]} />
-            <meshStandardMaterial
-              color={index % 2 === 0 ? "#ffbb68" : "#76d9ec"}
-              roughness={0.4}
-            />
-          </mesh>
-        </group>
-      ))}
-
-      <mesh position={[0, 0.015, -6.95]}>
-        <boxGeometry args={[5.6, 0.035, 0.25]} />
-        <meshStandardMaterial color="#f9f1bb" emissive="#b59b42" emissiveIntensity={0.45} />
-      </mesh>
-      <CuboidCollider
-        sensor
-        args={[2.85, 0.7, 0.16]}
-        position={[0, 0.42, -6.95]}
-        onIntersectionEnter={({ other }) => {
-          const name = other.rigidBodyObject?.name;
-          if (name?.startsWith("marble-")) {
-            onFinish(name.slice("marble-".length));
-          }
-        }}
-      />
-    </RigidBody>
-  );
-}
-
-function RaceScene({ round, onFinish }: { round: number; onFinish: (id: string) => void }) {
-  return (
-    <Canvas
-      shadows
-      dpr={[1, 1.8]}
-      camera={{ position: [10.5, 10.5, 15.5], fov: 49 }}
-      gl={{ antialias: true }}
-    >
-      <color attach="background" args={["#080e22"]} />
-      <fog attach="fog" args={["#080e22", 22, 45]} />
-      <ambientLight intensity={1.4} />
-      <hemisphereLight args={["#b4c7ff", "#322753", 1.2]} />
-      <directionalLight position={[6, 13, 9]} intensity={3} castShadow shadow-mapSize={[2048, 2048]} />
-
-      <Physics key={round} gravity={[0, -9.81, 0]} timeStep={1 / 60}>
-        <Track onFinish={onFinish} />
-        <MarbleBodies />
-      </Physics>
-
-      <OrbitControls
-        target={[0, 0.8, 0]}
-        minDistance={6}
-        maxDistance={30}
-        maxPolarAngle={Math.PI * 0.48}
-      />
-    </Canvas>
-  );
-}
+import { useCallback, useEffect, useMemo, useState } from "react";
+import BowlScene from "./components/BowlScene";
+import RaceScene from "./components/RaceScene";
+import { DESIGNS } from "./game";
+import { useLobby } from "./hooks/useLobby";
 
 export default function App() {
-  const [round, setRound] = useState(1);
-  const [winner, setWinner] = useState<string | null>(null);
-  const [finishers, setFinishers] = useState<string[]>([]);
+  const { room, mode, hasServerUrl, join, fill, start, reset } = useLobby();
+  const [nickname, setNickname] = useState("");
+  const [designIndex, setDesignIndex] = useState(0);
+  const [operatorPin, setOperatorPin] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [localWinner, setLocalWinner] = useState<string | null>(null);
+  const [crossed, setCrossed] = useState<string[]>([]);
+  const [clock, setClock] = useState(Date.now());
 
-  const onFinish = useCallback((id: string) => {
-    setWinner((current) => current ?? id);
-    setFinishers((current) => current.includes(id) ? current : [...current, id]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 120);
+    return () => window.clearInterval(timer);
   }, []);
 
-  const restart = () => {
-    setRound((value) => value + 1);
-    setWinner(null);
-    setFinishers([]);
-  };
+  useEffect(() => {
+    setLocalWinner(null);
+    setCrossed([]);
+    setNotice("");
+  }, [room.roundId]);
 
-  const champion = MARBLES.find((marble) => marble.id === winner);
+  const currentDesign = DESIGNS[designIndex];
+  const isLobby = room.phase === "lobby";
+  const isRacing = room.phase === "racing";
+  const pool = (room.entries.length * room.demoEntryFee).toFixed(1);
+  const countdown = room.startsAt === null
+    ? 0
+    : Math.max(0, Math.ceil((room.startsAt - clock) / 1000));
+  const winner = useMemo(
+    () => room.entries.find((entry) => entry.id === localWinner),
+    [room.entries, localWinner],
+  );
+
+  const finish = useCallback((id: string) => {
+    setLocalWinner((previous) => previous ?? id);
+    setCrossed((previous) => previous.includes(id) ? previous : [...previous, id]);
+  }, []);
+
+  async function operate(action: () => Promise<{ ok: boolean; error?: string }>, message: string) {
+    setBusy(true);
+    const result = await action();
+    setNotice(result.ok ? message : (result.error || "Action failed."));
+    setBusy(false);
+  }
+
+  async function addMarble() {
+    await operate(
+      () => join(nickname, designIndex),
+      mode === "shared" ? "Demo marble added to the shared bowl!" : "Added to local demo only.",
+    );
+  }
 
   return (
-    <main className="app">
-      <div className="scene">
-        <RaceScene round={round} onFinish={onFinish} />
-      </div>
-
-      <header className="header">
+    <div className="app-shell">
+      <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">M</div>
+          <div className="brand-logo">M</div>
           <div>
-            <div className="eyebrow">MONAD · HACKATHON PROTOTYPE</div>
+            <div className="eyebrow">MONAD BLITZ · BETA 2</div>
             <h1>MONAD <span>MARBLES</span></h1>
           </div>
         </div>
-        <span className="chip"><span className="pulse" /> BETA 1 — LOCAL PHYSICS</span>
+        <div className={"connection " + (mode === "shared" ? "online" : "offline")}>
+          <span className="dot" />
+          {mode === "shared" ? "SHARED LOBBY LIVE" : mode === "connecting" ? "CONNECTING…" : "LOCAL DEMO · NOT SHARED"}
+        </div>
       </header>
 
-      <section className="panel" aria-label="Race controls">
-        <div className="panel-heading">RACE LAB <span>#{String(round).padStart(3, "0")}</span></div>
-        <div className="stat-row">
-          <span>Marbles</span>
-          <strong>{MARBLES.length}</strong>
-        </div>
-        <div className="stat-row">
-          <span>Crossed finish</span>
-          <strong>{finishers.length}/{MARBLES.length}</strong>
-        </div>
-        <div className="winner">
-          <span>FIRST TO FINISH WINS</span>
-          {champion ? (
-            <div className="winner-name">
-              <i style={{ background: champion.color }} />
-              {champion.label} · #{champion.id}
-            </div>
-          ) : (
-            <div className="waiting">Race in progress…</div>
-          )}
-        </div>
-        <button onClick={restart}>↻ &nbsp; Restart race</button>
-        <p className="help">Drag to orbit · Scroll to zoom</p>
-      </section>
+      <div className="layout">
+        <aside className="panel entry-panel">
+          <div className="panel-topline">01 / ENTER THE BOWL</div>
+          <h2>Choose your <em>marble.</em></h2>
+          <p className="muted">Every entry becomes a marble. This beta uses simulated entries only.</p>
 
-      <footer className="footnote">
-        Real 3D rigid-body physics · 8 demo marbles · No wallet or prize pool connected yet
+          <div className="design-picker">
+            <button
+              className="arrow"
+              aria-label="Previous marble design"
+              onClick={() => setDesignIndex((designIndex + DESIGNS.length - 1) % DESIGNS.length)}
+              type="button"
+            >‹</button>
+            <div className="design-preview">
+              <div className="big-marble" style={{ background: `radial-gradient(circle at 27% 23%, #ffffffd9, ${currentDesign.color} 45%, #13172e 130%)` }} />
+              <strong>{currentDesign.label}</strong>
+              <small>{designIndex + 1} / {DESIGNS.length}</small>
+            </div>
+            <button
+              className="arrow"
+              aria-label="Next marble design"
+              onClick={() => setDesignIndex((designIndex + 1) % DESIGNS.length)}
+              type="button"
+            >›</button>
+          </div>
+
+          <label htmlFor="nickname">PLAYER NICKNAME</label>
+          <input
+            id="nickname"
+            maxLength={18}
+            placeholder="Your racer name"
+            value={nickname}
+            onChange={(event) => setNickname(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter" && isLobby && !busy) void addMarble(); }}
+          />
+          <button
+            className="primary-button"
+            type="button"
+            disabled={!isLobby || busy || room.entries.length >= room.maxPlayers}
+            onClick={() => void addMarble()}
+          >+ JOIN DEMO RACE</button>
+          <p className="fine-print">No wallet · No actual MON · No payment is collected</p>
+
+          <div className="divider" />
+          <div className="small-title">RECENT ENTRIES <span>{room.entries.length}/{room.maxPlayers}</span></div>
+          <div className="roster">
+            {room.entries.length === 0 ? (
+              <div className="empty-roster">The bowl is empty. Add the first marble!</div>
+            ) : (
+              room.entries.slice(-8).reverse().map((entry) => (
+                <div className="roster-item" key={entry.id}>
+                  <span className="mini-marble" style={{ background: DESIGNS[entry.design]?.color || "#b58aff" }} />
+                  <span>{entry.nickname}</span>
+                  <small>DEMO</small>
+                </div>
+              ))
+            )}
+          </div>
+        </aside>
+
+        <main className="arena">
+          <div className="arena-backdrop">
+            {isRacing ? (
+              <RaceScene entries={room.entries} roundId={room.roundId} onFinish={finish} />
+            ) : (
+              <BowlScene entries={room.entries} roundId={room.roundId} />
+            )}
+          </div>
+          <div className="arena-heading">
+            <span className="stage-label">{isRacing ? "THE RACE IS ON" : room.phase === "countdown" ? "GET READY TO DROP" : "THE WAITING BOWL"}</span>
+            <span className="round-label">ROUND #{String(room.roundId).padStart(3, "0")}</span>
+          </div>
+
+          {room.phase === "countdown" && (
+            <div className="countdown-overlay">
+              <div className="countdown-number">{countdown || "GO!"}</div>
+              <div>MARBLES, GET READY!</div>
+            </div>
+          )}
+
+          <div className="bottom-hint">
+            {isRacing
+              ? "LOCAL PHYSICS PREVIEW · Drag to orbit · Scroll to zoom"
+              : "MARBLES DROP AS PEOPLE JOIN · Drag to orbit · Scroll to zoom"}
+          </div>
+
+          {isRacing && (
+            <div className="winner-card">
+              <small>FIRST TO FINISH · LOCAL PREVIEW</small>
+              {winner ? (
+                <strong><span style={{ background: DESIGNS[winner.design]?.color }} />{winner.nickname} wins!</strong>
+              ) : (
+                <strong>Racing… <span className="muted">{crossed.length}/{room.entries.length}</span></strong>
+              )}
+            </div>
+          )}
+        </main>
+
+        <aside className="panel operator-panel">
+          <div className="panel-topline">02 / RACE CONTROL</div>
+          <h2>Make it <em>happen.</em></h2>
+          <div className="numbers">
+            <div><small>MARBLES</small><strong>{room.entries.length}</strong></div>
+            <div><small>DEMO POOL</small><strong>{pool} <span>MON*</span></strong></div>
+          </div>
+          <div className="state-row">
+            <span>STATUS</span>
+            <strong>{room.phase === "lobby" ? "OPEN FOR ENTRIES" : room.phase === "countdown" ? "STARTING" : "RACING"}</strong>
+          </div>
+          <p className="fine-print">*Illustrative testnet pool. No actual MON is deposited.</p>
+
+          <label htmlFor="pin">OPERATOR PIN</label>
+          <input
+            id="pin"
+            type="password"
+            autoComplete="off"
+            placeholder="Set OPERATOR_PIN on server"
+            value={operatorPin}
+            onChange={(event) => setOperatorPin(event.target.value)}
+          />
+          <button
+            className="secondary-button"
+            disabled={!isLobby || busy || room.entries.length >= room.maxPlayers}
+            onClick={() => void operate(() => fill(operatorPin, 8), "Eight demo marbles requested.")}
+          >+ ADD 8 DEMO MARBLES</button>
+          <button
+            className="primary-button"
+            disabled={!isLobby || busy || room.entries.length < 2}
+            onClick={() => void operate(() => start(operatorPin), "Race countdown started!")}
+          >▶ START RACE</button>
+          <button
+            className="outline-button"
+            disabled={busy}
+            onClick={() => void operate(() => reset(operatorPin), "Lobby reset. Ready for the next round.")}
+          >↻ RESET LOBBY</button>
+          {notice && <p className="notice" role="status">{notice}</p>}
+
+          <div className="divider" />
+          <div className="small-title">BETA STATUS</div>
+          <p className="muted explanation">
+            {mode === "shared"
+              ? "Lobby entries, start, and reset are shared across browsers through Socket.IO."
+              : hasServerUrl
+                ? "The shared server is unreachable. Actions run locally until the connection is restored."
+                : "No race-server URL is configured. This is a local-only demo."}
+          </p>
+          <p className="muted explanation">
+            The race physics still runs independently in each browser. Beta 3 will provide one authoritative winner.
+          </p>
+        </aside>
+      </div>
+
+      <footer className="footer">
+        <span>MONAD MARBLES / HACKATHON PROTOTYPE</span>
+        <span>TESTNET INTEGRATION COMING NEXT · NO REAL PRIZES</span>
       </footer>
-    </main>
+    </div>
   );
 }
