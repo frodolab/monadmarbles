@@ -810,7 +810,7 @@ function beginPodiumTransition(){
 function raceHandoff(){
  const selectedTheme=document.querySelector('.stage').dataset.theme||'candy';
  return {
-  version:25,theme:selectedTheme,localPreview:true,
+  version:27,theme:selectedTheme,localPreview:false,livePreview:true,
   viewerMarbleId:myMarble?(myMarble.serverId||'lobby-'+myMarble.id):null,
   participants:entrants.map(p=>({
    id:p.serverId||('lobby-'+p.id), username:p.name, marbleDesign:p.index,
@@ -930,7 +930,7 @@ function timeUI(){
  $('time').textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
  $('time').dataset.label=$('time').textContent;
  $('registrationTimer').classList.toggle('warning',running&&!finished&&seconds>=1&&seconds<=5);
- $('start').textContent=running?'Ⅱ PAUSE':finished?'✓ CLOSED':'▶ TIMER';
+ $('start').textContent=window.MonadMarblesPreviewBridge?.connected?'▶ START RACE':running?'Ⅱ PAUSE':finished?'✓ CLOSED':'▶ TIMER';
  $('start').disabled=finished;
  $('instantStart').textContent='⚡ RACE NOW';
  $('instantStart').disabled=raceActive||raceTransitioning;
