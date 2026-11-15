@@ -1184,8 +1184,17 @@ window.MonadMarblesPreviewBridge={
   }
  },
  setOfficialResult(result){
-  this.pendingResult=result;
-  if(raceFrame?.contentWindow&&raceFrameReady)raceFrame.contentWindow.postMessage({type:'monadmarbles:official-result',...result},location.origin);
+  // These fields are derived only from the same authoritative room as
+  // the official winner; neither UI nor wallet selects the payout recipient.
+  const source=this.liveRoom;
+  const payload={
+   ...result,
+   paidMode:source?.demoOnly===false,
+   poolWei:source?.prizePoolWei||source?.blockchain?.poolWei||null,
+   payout:source?.payout||null,
+  };
+  this.pendingResult=payload;
+  if(raceFrame?.contentWindow&&raceFrameReady)raceFrame.contentWindow.postMessage({type:'monadmarbles:official-result',...payload},location.origin);
  },
 };
 window.MonadMarblesLobby={getParticipants(){return entrants.map(p=>({nickname:p.name,marbleDesign:p.index,marbleId:p.id}))},getState(){return {registrationOpen:!finished,preRaceActive,secondsRemaining:remaining,entrants:entrants.length}}};
