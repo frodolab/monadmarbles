@@ -327,6 +327,15 @@ io.on("connection", (socket) => {
     });
   }
 
+  // The V27 operator panel must validate the PIN before it is shown as unlocked.
+  // This is only a verification step; every privileged mutation still checks
+  // the PIN independently in lobby:start/lobby:fill/lobby:reset.
+  socket.on("operator:verify", (payload, ack) => {
+    if (!operatorPin) return reply(ack, false, "Operator PIN is not configured on this server.");
+    if (!isOperator(payload)) return reply(ack, false, "Incorrect operator PIN or too many attempts.");
+    reply(ack, true);
+  });
+
   let lastJoin = 0;
   socket.on("lobby:join", (payload, ack) => {
     if (paidMode) return reply(ack, false, "Paid mode: submit a confirmed on-chain entry and signed nickname instead.");
@@ -337,6 +346,11 @@ io.on("connection", (socket) => {
       ? payload.nickname.replace(/[<>]/g, "").trim().slice(0, 18) : "";
     const design = Number(payload?.design);
     if (!nickname) return reply(ack, false, "Enter a nickname.");
+    // Free-entry sandbox: a connected wallet's shortened address is its nickname.
+    // Prevent duplicate demo marbles from repeated joins/tabs with that address.
+    if (room.entries.some(entry => entry.nickname.toLowerCase() === nickname.toLowerCase())) {
+      return reply(ack, false, "This wallet/nickname is already entered in this round.");
+    }
     if (!Number.isInteger(design) || design < 0 || design >= designs.length) {
       return reply(ack, false, "Invalid marble design.");
     }
