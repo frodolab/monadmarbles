@@ -118,6 +118,14 @@ start.onclick = async () => {
   if (!pin) { document.getElementById('devAccess').click(); return; }
   await ui.start(pin);
 };
+for (const [id, count] of [['addOne', 1], ['addTen', 10]]) {
+  const button = document.getElementById(id);
+  button.onclick = async () => {
+    const pin = ui.getOperatorPin();
+    if (!pin) { document.getElementById('devAccess').click(); return; }
+    await ui.fill(pin, count);
+  };
+}
 const instantStart = document.getElementById('instantStart');
 instantStart.style.display = 'none';
 document.getElementById('registrationTimer').style.display = 'none';
