@@ -83,3 +83,19 @@ This is only a **readiness check**. No `joinRace` transactions or paid entries
 are enabled in the web UI or accepted by Socket.IO. The next implementation
 step must apply verified events idempotently to the shared lobby and recover
 all registered wallets after an outage.
+
+## Chain admission/recovery (feature branch only)
+
+`chain-admission.js` reconstructs paid marble IDs, wallets and designs from
+**confirmed** contract event logs. It never trusts a client-supplied entry
+record. Incremental polling uses safe block cursors, and deduplicates by entry
+ID, wallet and transaction log identity. Nickname signatures change only
+a cosmetic label. A restart recovers all paid entries from the on-chain event
+history (with a wallet-name placeholder if an off-chain nickname wasn't saved).
+
+If a race is already **Closed** when a server boots, it enters the
+`interrupted` state and refuses to rerun the race: the owner must reconcile
+or cancel it and issue refunds. A running process can only start a race after
+having personally observed its **Open → Closed** lifecycle.
+
+This module is not wired to production or paid Socket.IO entry yet.
