@@ -571,6 +571,16 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
 @media(prefers-reduced-motion:reduce){.bowl-timer.warning .timer-time::after,.pre-race-countdown .pre-number{animation:none!important}.bowl-timer.warning .timer-time::after{opacity:1}}
 
 </style>
+<style>
+/* Network-driven actions: independent wallet connection and clearly labeled waiting state. */
+.mm-lobby-controls{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin:6px auto 2px;width:min(460px,94%);position:relative;z-index:8}
+.mm-wallet-cta{border:2px solid #fff0c3;border-radius:999px;background:#32275f;color:#fff4cd;padding:7px 17px;font-family:Nunito,system-ui,sans-serif;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 3px 0 #8d71bc}
+.mm-wallet-cta:hover{background:#493586}
+.mm-wallet-cta:focus-visible,.mm-mode-switch:focus-visible{outline:3px solid #ffdb67;outline-offset:2px}
+.mm-lobby-notice{color:#34275f;font-family:Nunito,system-ui,sans-serif;font-size:12px;font-weight:800;line-height:1.25;text-align:center;max-width:435px;margin:2px 0;min-height:27px}
+.mm-mode-switch{font:800 11px Nunito,system-ui,sans-serif;text-decoration:underline;color:#50358c;cursor:pointer}
+#join:disabled{cursor:not-allowed;opacity:.66}
+</style>
 </head>
 <body>
 <div class="stage" data-theme="candy">
@@ -631,6 +641,11 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
       <div class="bowl-timer" id="registrationTimer" aria-label="Registration closes in"><div class="timer-time" id="time">01:30</div></div><div class="pre-race-countdown" id="preRaceCountdown" aria-live="off" hidden><span class="pre-label">RACE STARTS IN</span><strong class="pre-number" id="preRaceNumber">10</strong><span class="pre-label">GET READY TO ROLL!</span></div>
     </div>
     <div class="entrants-summary"><span class="entrants-count"><span id="count">0</span> / 60 ENTRIES</span><span id="bowlCaption">Waiting for racers</span></div>
+    <div class="mm-lobby-controls" aria-label="Wallet and registration status">
+      <button class="mm-wallet-cta" id="walletConnectCta" type="button">🦊 CONNECT METAMASK</button>
+      <p class="mm-lobby-notice" id="mmLobbyNotice" role="status">Connecting to the race server…</p>
+      <a class="mm-mode-switch" id="mmModeSwitch" href="/?demo=1">Try free demo with bots</a>
+    </div>
     <button class="btn pink main-join" id="join" type="button">✦ JOIN THE RACE ✦</button>
   </div>
 </section>
@@ -943,6 +958,9 @@ $('instantStart').onclick=async()=>{
  if(await authorizedDevAction('race:now')){running=false;preRaceActive=false;stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;$('registrationTimer').classList.remove('warning');beginRace()}
 };
 function timeUI(){
+ // V27 server integration uses only a manually started, server-timed countdown.
+ // Never let this retired 90-second timer alter the operator buttons.
+ if(window.MonadMarblesPreviewBridge) return;
  const seconds=Math.max(0,Math.ceil(remaining));
  $('time').textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
  $('time').dataset.label=$('time').textContent;
@@ -973,7 +991,7 @@ function sphere(x,y,r,col,alpha=1){ctx.save();ctx.globalAlpha=alpha;
 
 function ellipse(x,y,rx,ry,fill,stroke,width=1){ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.stroke()}}
 function markMine(x,y,r,ts){ctx.save();const pulse=.65+.25*Math.sin(ts*.005);ctx.strokeStyle=`rgba(255,224,91,${pulse})`;ctx.lineWidth=5;ctx.shadowColor='#ffe051';ctx.shadowBlur=17;ctx.beginPath();ctx.arc(x,y,r+7,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#fff1a0';ctx.textAlign='center';ctx.font='bold 24px Nunito, sans-serif';ctx.fillText('★',x,y-r-17);ctx.restore()}
-function frame(ts){let dt=Math.min(.04,(ts-tPrevious)/1000||0);tPrevious=ts;if(running){if(lastTs)remaining=Math.max(0,remaining-(ts-lastTs)/1000);lastTs=ts;if(remaining<=0){beginPreRaceCountdown()}timeUI()}
+function frame(ts){let dt=Math.min(.04,(ts-tPrevious)/1000||0);tPrevious=ts;if(running&&!window.MonadMarblesPreviewBridge){if(lastTs)remaining=Math.max(0,remaining-(ts-lastTs)/1000);lastTs=ts;if(remaining<=0){beginPreRaceCountdown()}timeUI()}
 if(preRaceActive){
  const dtSecs=Math.max(0,(ts-preRaceLastTs)/1000);preRaceLastTs=ts;
  preRaceRemaining=Math.max(0,preRaceRemaining-dtSecs);
@@ -1151,6 +1169,11 @@ window.MonadMarblesPreviewBridge={
   }
   const isLobby=next.phase==='lobby';
   const isCountdown=next.phase==='countdown';
+  if((next.phase==='waiting'||isLobby)&&!raceActive&&!raceTransitioning){
+   // One source of truth: stale local 90-second timer must not close registrations.
+   running=false;finished=false;preRaceActive=false;
+   stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;
+  }
   $('join').disabled=!isLobby||Boolean(myMarble)||incoming.length>=next.maxPlayers||(next.demoOnly===false&&!this.joinReady?.());
   $('join').textContent=myMarble?'✓ ENTERED':'✦ CONNECT & JOIN PREVIEW ✦';
   $('start').disabled=!isLobby||incoming.length<2;
