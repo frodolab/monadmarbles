@@ -32,6 +32,7 @@ const abi = parseAbi([
   "function races(uint256) view returns (uint8 status, uint256 entryFee, uint256 prizePool, uint256 winningEntryId, uint64 createdAt, uint64 closedAt, uint16 maxEntries, uint16 entryCount, bool prizeClaimed)",
   "function getEntry(uint256) view returns (uint256 raceId, address player, uint8 design)",
   "function finalizeRace(uint256 raceId, uint256 winningEntryId)",
+  "function closeEntries(uint256 raceId)",
   "event PrizePaid(uint256 indexed raceId, uint256 indexed entryId, address indexed winner, uint256 amount)",
 ]);
 
@@ -104,6 +105,7 @@ function createAutoSettler({
   }
 
   let inFlight = null;
+  let closingRace = null;
   let readiness = "checking";
   let lastError = null;
 
@@ -184,6 +186,34 @@ function createAutoSettler({
     readiness = "ready";
     lastError = null;
     return { chainId, contractAddress: lowerContract, settlerAddress: account.address };
+  }
+
+  // The same explicitly authorized testnet relayer can close an open race.
+  // Keep the signing key on the server; never send it to a browser or accept
+  // arbitrary calldata from a PIN-authenticated client.
+  async function closeEntries(raceId) {
+    const id = BigInt(raceId);
+    assertValue(id > 0n, "Invalid race ID.");
+    assertValue(closingRace === null, "An on-chain race close is already in progress.");
+    closingRace = id.toString();
+    try {
+      await assertReady();
+      const race = await client.readContract({ address: contractAddress, abi, functionName: "races", args: [id] });
+      assertValue(Number(race[0]) === 1, "Race is not open for entries.");
+      assertValue(Number(race[7]) >= 2, "At least two confirmed entries are required.");
+      const activeRaceId = await client.readContract({ address: contractAddress, abi: parseAbi(["function activeRaceId() view returns (uint256)"]), functionName: "activeRaceId" });
+      assertValue(activeRaceId === id, "Race is no longer the active on-chain race.");
+      const hash = await wallet.writeContract({ account, chain, address: contractAddress,
+        abi, functionName: "closeEntries", args: [id] });
+      assertValue(/^0x[0-9a-f]{64}$/i.test(hash), "Race close did not return a valid transaction hash.");
+      const receipt = await client.waitForTransactionReceipt({ hash, confirmations: 2, timeout: 120000 });
+      assertValue(receipt.status === "success", "Race-close transaction reverted.");
+      const updated = await client.readContract({ address: contractAddress, abi, functionName: "races", args: [id] });
+      assertValue(Number(updated[0]) === 2, "Race is not confirmed closed on-chain.");
+      return hash.toLowerCase();
+    } finally {
+      closingRace = null;
+    }
   }
 
   async function _reconcile(row) {
@@ -274,7 +304,7 @@ function createAutoSettler({
   }
 
   return { address: lowerContract, settlerAddress: account.address,
-    assertReady, recordWinner, tick, summary };
+    assertReady, closeEntries, recordWinner, tick, summary };
 }
 
 module.exports = { createAutoSettler, abi, CHAIN_ID };
