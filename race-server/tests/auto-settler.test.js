@@ -70,7 +70,7 @@ async function main() {
     });
     assert.equal(noPrefix.settlerAddress,owner);
     const pastedQuoted = createAutoSettler({
-      env: { ...envConfig(directory), MONAD_SETTLER_PRIVATE_KEY: " \\"" + privateKey + "\\" " },
+      env: { ...envConfig(directory), MONAD_SETTLER_PRIVATE_KEY: ' "' + privateKey + '" ' },
       publicClient: chain.publicClient, walletClient: chain.walletClient,
     });
     assert.equal(pastedQuoted.settlerAddress,owner);
