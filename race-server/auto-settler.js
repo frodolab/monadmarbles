@@ -206,6 +206,7 @@ function createAutoSettler({
       const hash = await wallet.writeContract({ account, chain, address: contractAddress,
         abi, functionName: "closeEntries", args: [id] });
       assertValue(/^0x[0-9a-f]{64}$/i.test(hash), "Race close did not return a valid transaction hash.");
+      onSubmitted(hash.toLowerCase());
       const receipt = await client.waitForTransactionReceipt({ hash, confirmations: 2, timeout: 120000 });
       assertValue(receipt.status === "success", "Race-close transaction reverted.");
       const updated = await client.readContract({ address: contractAddress, abi, functionName: "races", args: [id] });
