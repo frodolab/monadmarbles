@@ -190,3 +190,41 @@ and reads active-race parameters at one confirmed block. For a newly created
 race with zero entrants, the server starts scanning at the next confirmed
 block; after paid entries exist, the full immutable event history is recovered
 in bounded pages. If any RPC read fails, race start remains locked.
+
+## V2 automatic payout worker (new contract deployment required)
+
+`auto-settler.js` is a separate, **opt-in** worker for a trusted race server.
+At race finish it synchronously records the canonical winner on a Railway
+volume, and a dedicated testnet relayer signs `finalizeRace(raceId,entryId)`.
+The V2 contract sends the full prize to the winner **in that same on-chain
+transaction**. No winner wallet signature, payout button, or claim button.
+
+Keep a 1-replica backend and attach a durable volume at `/data`.
+Required environment variables **only after a NEW V2 contract is deployed**:
+
+```env
+MONAD_ENTRY_MODE=onchain
+MONAD_AUTOPAYOUT_ENABLED=true
+MONAD_CONTRACT_ADDRESS=0x<NEW_V2_CONTRACT_ADDRESS>
+MONAD_SETTLEMENT_DIR=/data
+MONAD_SETTLER_PRIVATE_KEY=<A_DEDICATED_TESTNET_ONLY_RELAYER_PRIVATE_KEY>
+MONAD_RPC_URL=https://testnet-rpc.monad.xyz
+MONAD_DEPLOY_BLOCK=<NEW_V2_DEPLOY_BLOCK>
+```
+
+**NEVER** use the deployment owner wallet's private key on Railway, and never
+commit/paste keys into source, ChatGPT, screenshots, or frontend variables.
+The owner must call `setSettler(relayerAddress)` on the new contract, and
+fund that relayer with ~0.05–0.1 TESTNET MON for gas. Do not enable the flag
+until both steps are complete.
+
+Before starting the countdown, the backend checks V2's `AUTO_PAYOUT` marker,
+the chain ID, the relayer's authorization and testnet gas balance. A stale or
+unfunded relayer blocks the start rather than accepting a paid race it cannot
+settle. The finalization attempt is retried from the durable journal after a
+restart. If the server crashes before the winner is recorded, physics must
+**not** be guessed/replayed for a paid race; the safe action is cancel/refund.
+Pending settlement transactions are never blindly resubmitted.
+
+The existing V1 contract `0x9fB46...` and its paid staging service continue
+to function unchanged until V2 is deployed, tested, and explicitly cut over.

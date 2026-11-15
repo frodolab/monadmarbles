@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node tests/physics.test.js && node tests/sync.test.js && node tests/chain-verifier.test.js && node tests/chain-admission.test.js"
+    "test": "node tests/physics.test.js && node tests/sync.test.js && node tests/chain-verifier.test.js && node tests/chain-admission.test.js && node tests/auto-settler.test.js"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -20,4 +20,4 @@
   "devDependencies": {
     "socket.io-client": "^4.8.1"
   }
-}
+}\n
