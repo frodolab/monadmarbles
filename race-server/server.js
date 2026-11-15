@@ -19,10 +19,15 @@ const maxPlayers = Math.max(2, Math.min(120, Number(process.env.MAX_PLAYERS) || 
 const designs = ["violet", "tangerine", "aqua", "rose", "lime", "gold", "blue", "mint"];
 const demoEntryFee = 0.1;
 const operatorPin = process.env.OPERATOR_PIN || "";
+const serverSessionId = randomUUID();
+const isAutomatedTest = process.env.NODE_ENV === "test";
+const countdownMs = isAutomatedTest ? 80 : 3000;
+const physicsIntervalMs = isAutomatedTest ? 1 : 1000 / 60;
 const frameEveryTicks = 5; // 60 Hz physics, ~12 Hz snapshots
 
 let room = {
   roundId: 1,
+  raceId: randomUUID(),
   phase: "lobby",
   startsAt: null,
   entries: [],
@@ -37,6 +42,7 @@ let lastRaceFrame = null;
 function snapshot() {
   return {
     ...room,
+    sessionId: serverSessionId,
     maxPlayers,
     demoEntryFee,
     demoOnly: true,
@@ -47,6 +53,10 @@ function snapshot() {
 
 function broadcast() {
   io.emit("lobby:state", snapshot());
+}
+
+function officialFrame(roundId) {
+  return { ...engine.snapshot(roundId), raceId: room.raceId, sessionId: serverSessionId };
 }
 
 function reply(ack, ok, error) {
@@ -81,16 +91,19 @@ function finishRace() {
   room.finishOrder = [...engine.finishOrder];
 
   // Send final positions and winner to every spectator, including those joining late.
-  lastRaceFrame = engine.snapshot(finishedRound);
+  lastRaceFrame = officialFrame(finishedRound);
   io.emit("race:snapshot", lastRaceFrame);
   broadcast();
   io.emit("race:result", {
     roundId: finishedRound,
+    raceId: room.raceId,
+    sessionId: serverSessionId,
     winnerId: room.winnerId,
     finishOrder: room.finishOrder,
     elapsed: lastRaceFrame.elapsed,
   });
 
+  console.log("Race completed", { raceId: room.raceId, roundId: finishedRound, winnerId: room.winnerId, ticks: lastRaceFrame.tick, sessionId: serverSessionId });
   if (physicsTimer) clearInterval(physicsTimer);
   physicsTimer = null;
   engine.dispose();
@@ -108,20 +121,21 @@ async function beginRace(roundId) {
 
     engine = race;
     room.phase = "racing";
+    console.log("Race started", { raceId: room.raceId, roundId, players: room.entries.length, sessionId: serverSessionId });
     broadcast();
 
-    lastRaceFrame = engine.snapshot(roundId);
+    lastRaceFrame = officialFrame(roundId);
     io.emit("race:snapshot", lastRaceFrame);
 
     physicsTimer = setInterval(() => {
       if (!engine || room.roundId !== roundId || room.phase !== "racing") return;
       engine.step();
       if (engine.ticks % frameEveryTicks === 0 || engine.done) {
-        lastRaceFrame = engine.snapshot(roundId);
+        lastRaceFrame = officialFrame(roundId);
         io.emit("race:snapshot", lastRaceFrame);
       }
       if (engine.done) finishRace();
-    }, 1000 / 60);
+    }, physicsIntervalMs);
   } catch (error) {
     console.error("Failed to start authoritative race:", error);
     stopTimers();
@@ -136,7 +150,7 @@ app.get("/", (_req, res) => {
   res.json({ service: "monad-marbles-race-server", status: "online", beta: 3, demoOnly: true });
 });
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "monad-marbles-race-server", authoritativePhysics: true });
+  res.json({ status: "ok", service: "monad-marbles-race-server", authoritativePhysics: true, sessionId: serverSessionId });
 });
 app.get("/state", (_req, res) => res.json(snapshot()));
 
@@ -147,6 +161,8 @@ io.on("connection", (socket) => {
   if (room.phase === "finished") {
     socket.emit("race:result", {
       roundId: room.roundId,
+      raceId: room.raceId,
+      sessionId: serverSessionId,
       winnerId: room.winnerId,
       finishOrder: room.finishOrder,
       elapsed: lastRaceFrame?.elapsed || 0,
@@ -190,11 +206,11 @@ io.on("connection", (socket) => {
     if (room.phase !== "lobby") return reply(ack, false, "Race is already started.");
     if (room.entries.length < 2) return reply(ack, false, "Add at least two marbles.");
     room.phase = "countdown";
-    room.startsAt = Date.now() + 3500;
+    room.startsAt = Date.now() + countdownMs;
     const roundId = room.roundId;
     reply(ack, true);
     broadcast();
-    countdownTimer = setTimeout(() => void beginRace(roundId), 3500);
+    countdownTimer = setTimeout(() => void beginRace(roundId), countdownMs);
   });
 
   socket.on("lobby:reset", (payload, ack) => {
@@ -202,6 +218,7 @@ io.on("connection", (socket) => {
     stopTimers();
     room = {
       roundId: room.roundId + 1,
+      raceId: randomUUID(),
       phase: "lobby",
       startsAt: null,
       entries: [],
@@ -215,9 +232,9 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => console.log("Spectator disconnected", socket.id));
 });
 
-const PORT = Number(process.env.PORT) || 3001;
+const PORT = process.env.PORT === undefined ? 3001 : Number(process.env.PORT);
 httpServer.listen(PORT, "0.0.0.0", () => {
-  console.log("Monad Marbles authoritative race server on port " + PORT);
+  console.log("Monad Marbles authoritative race server on port " + httpServer.address().port + ", session " + serverSessionId);
   if (!operatorPin) {
     console.warn("OPERATOR_PIN not configured: any visitor may control demo races.");
   }
