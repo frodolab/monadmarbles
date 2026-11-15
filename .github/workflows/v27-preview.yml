@@ -54,3 +54,41 @@ jobs:
             }
           })();
           NODE
+      - name: Verify deployed V27 paid frontend/backend contract agreement (read only)
+        run: |
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const api='https://monadmarbles-race.up.railway.app';
+            const ui='https://monadmarbles-production.up.railway.app';
+            const r=await fetch(api+'/state',{signal:AbortSignal.timeout(15000)});
+            assert.equal(r.status,200);
+            const state=await r.json();
+            assert.equal(state.course,'v27');
+            assert.equal(state.demoOnly,false);
+            assert.equal(state.blockchain?.mode,'onchain');
+            assert.equal(state.blockchain?.chainId,10143);
+            assert.equal(state.blockchain?.autoPayoutEnabled,true);
+            const address=String(state.blockchain.contractAddress||'').toLowerCase();
+            assert.match(address,/^0x[0-9a-f]{40}$/);
+            const f=await fetch(ui,{signal:AbortSignal.timeout(15000)});
+            assert.equal(f.status,200);
+            const html=await f.text();
+            const js=[...html.matchAll(/(?:src|href)="(\/assets\/[^"]+\.js)"/g)].map(m=>m[1]);
+            assert.ok(js.length>0,'V27 frontend has no bundled JS assets');
+            const bundles=await Promise.all([...new Set(js)].map(async p=>{
+              const res=await fetch(ui+p,{signal:AbortSignal.timeout(20000)});
+              assert.equal(res.status,200);return res.text();
+            }));
+            assert.ok(bundles.some(code=>code.toLowerCase().includes(address)),
+              'V27 public frontend was built with a different or unresolved contract address');
+            const cors=await fetch(api+'/socket.io/?EIO=4&transport=polling',{
+              headers:{Origin:ui},signal:AbortSignal.timeout(15000)});
+            assert.equal(cors.status,200);
+            assert.equal(cors.headers.get('access-control-allow-origin'),ui);
+            console.log('PUBLIC_PAID_V27_SMOKE_OK',JSON.stringify({
+              course:state.course,paid:!state.demoOnly,autoPayout:state.blockchain.autoPayoutEnabled,
+              sameContract:true,previewCors:true,phase:state.phase,entries:state.entries.length,
+            }));
+          })().catch(error=>{console.error(error);process.exitCode=1;});
+          NODE
