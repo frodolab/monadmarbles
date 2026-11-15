@@ -778,6 +778,7 @@ function makeMatchingMarblePreview(color,index){
  return canvas.toDataURL('image/png');
 }
 const matchingMarbleImages=colors.map(([name,color],i)=>makeMatchingMarblePreview(color,i));
+const matchingMarbleTextureImages=matchingMarbleImages.map(src=>{const image=new Image();image.src=src;return image});
 
 function ballCss(c){return `--ball:${c};`}colors.forEach(([name,c],i)=>{const b=document.createElement('button');b.type='button';b.className='choice'+(i===0?' active':'');b.title='Select '+name;b.innerHTML=`<div class="ball" style="${ballCss(c)};background-image:linear-gradient(145deg,#ffffff55,transparent 45%),url(${matchingMarbleImages[i]});background-size:cover;background-position:center"></div><span>${name}</span>`;b.onclick=()=>{if(finished||preRaceActive)return;selected=i;[...choiceRow.children].forEach((x,j)=>x.classList.toggle('active',j===selected));if(myMarble&&!finished){myMarble.index=i;myMarble.color=colors[i][1];syncPlayerPreview();update();toast('Your marble updated for all spectators (local demo)')}b.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'})};choiceRow.appendChild(b)});
 function toast(s){const e=$('toast');e.textContent=s;e.classList.add('show');clearTimeout(toastHandle);toastHandle=setTimeout(()=>e.classList.remove('show'),2300)}
@@ -1007,17 +1008,15 @@ $('start').onclick=async()=>{
 };
 // Bowl is rendered in Canvas 2D with layered perspective shading to fake a 3D glass bowl.
 const canvas=$('bowl'),ctx=canvas.getContext('2d');let tPrevious=0;
-function sphere(x,y,r,col,alpha=1){ctx.save();ctx.globalAlpha=alpha;
- const sh=ctx.createRadialGradient(x-r*.38,y-r*.45,r*.08,x,y,r*1.08);
- sh.addColorStop(0,'#ffffff');sh.addColorStop(.16,'#ffffffcc');sh.addColorStop(.24,col);sh.addColorStop(.72,col);sh.addColorStop(1,'#202663');
- ctx.fillStyle=sh;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
- // Preview the race's winding ribbon motif inside the illustrated glass bowl.
- ctx.save();ctx.beginPath();ctx.arc(x,y,r*.91,0,Math.PI*2);ctx.clip();
- ctx.translate(x,y);ctx.rotate(((x*.013+y*.017)%(Math.PI*2)));
- ctx.strokeStyle='rgba(255,249,230,.80)';ctx.lineWidth=r*.27;ctx.lineCap='round';
- ctx.beginPath();ctx.bezierCurveTo(-r*1.1,-r*.82,-r*.1,-r*.05,r*.8,r*.88);ctx.stroke();
- ctx.fillStyle='#fffbe6';ctx.beginPath();ctx.arc(r*.42,-r*.36,r*.13,0,Math.PI*2);ctx.fill();
- ctx.restore();ctx.strokeStyle='#ffffffa8';ctx.lineWidth=1.3;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();ctx.restore()}
+function sphere(x,y,r,col,alpha=1,designIndex=-1){ctx.save();ctx.globalAlpha=alpha;
+ const tex=matchingMarbleTextureImages[designIndex];
+ ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.clip();
+ if(tex?.complete&&tex.naturalWidth){ctx.drawImage(tex,x-r,y-r,2*r,2*r)}
+ else {ctx.fillStyle=col;ctx.fillRect(x-r,y-r,2*r,2*r)}
+ const shade=ctx.createRadialGradient(x-r*.39,y-r*.47,r*.03,x,y,r*1.19);
+ shade.addColorStop(0,'#ffffff99');shade.addColorStop(.23,'#ffffff17');shade.addColorStop(.60,'#00000000');shade.addColorStop(1,'#10134096');
+ ctx.fillStyle=shade;ctx.fillRect(x-r,y-r,2*r,2*r);
+ ctx.restore();ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle='#ffffffa8';ctx.lineWidth=1.3;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();ctx.restore()}
 
 function ellipse(x,y,rx,ry,fill,stroke,width=1){ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.stroke()}}
 function markMine(x,y,r,ts){ctx.save();const pulse=.65+.25*Math.sin(ts*.005);ctx.strokeStyle=`rgba(255,224,91,${pulse})`;ctx.lineWidth=5;ctx.shadowColor='#ffe051';ctx.shadowBlur=17;ctx.beginPath();ctx.arc(x,y,r+7,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#fff1a0';ctx.textAlign='center';ctx.font='bold 24px Nunito, sans-serif';ctx.fillText('★',x,y-r-17);ctx.restore()}
@@ -1088,7 +1087,7 @@ for(const p of [...entrants].reverse()){
     falling.settled=true;
     falling.y=targetY;
     falling.vy=0;
-    falling.landedAt=ts;
+    falling.landedAt=ts;window.MonadMarblesAudio?.sfx('bounce');
    }
   }
   drawY=falling.y;
@@ -1107,7 +1106,7 @@ for(const p of [...entrants].reverse()){
  }
  ctx.save();
  if(drawY>rimY+5){innerBowlClip();ctx.clip();}
- sphere(drawX,drawY,drawR,p.color,1);
+ sphere(drawX,drawY,drawR,p.color,1,p.index);
  if(p===myMarble)markMine(drawX,drawY,drawR,ts);
  ctx.restore();
 }
