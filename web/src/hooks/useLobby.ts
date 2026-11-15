@@ -104,18 +104,6 @@ export function useLobby() {
 
     if (event === "lobby:start") {
       return { ok: false, error: "The shared race server must be online to start an official race." };
-      // This is deliberately unavailable in offline demo mode.
-      /* if (current.phase !== "lobby") return { ok: false, error: "Race already started." };
-      if (current.entries.length < 2) return { ok: false, error: "Add at least two marbles." };
-      const roundId = current.roundId;
-      updateLocal({ ...current, phase: "countdown", startsAt: Date.now() + 3500 });
-      window.setTimeout(() => {
-        const next = roomRef.current;
-        if (next.roundId === roundId && next.phase === "countdown") {
-          updateLocal({ ...next, phase: "racing" });
-        }
-      }, 3500);
-      return { ok: true }; */
     }
 
     if (event === "lobby:reset") {
