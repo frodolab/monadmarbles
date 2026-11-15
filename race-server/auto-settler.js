@@ -191,7 +191,7 @@ function createAutoSettler({
   // The same explicitly authorized testnet relayer can close an open race.
   // Keep the signing key on the server; never send it to a browser or accept
   // arbitrary calldata from a PIN-authenticated client.
-  async function closeEntries(raceId) {
+  async function closeEntries(raceId, onSubmitted = () => {}) {
     const id = BigInt(raceId);
     assertValue(id > 0n, "Invalid race ID.");
     assertValue(closingRace === null, "An on-chain race close is already in progress.");
