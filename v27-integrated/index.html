@@ -1075,7 +1075,7 @@ window.MonadMarblesPreviewBridge={
  getSelectedDesign(){return selected},
  getOperatorPin(){return devToken||''},
  toast,
- setConnected(yes){if(!yes)$('start').disabled=true;},
+ setConnected(yes){this.connected=Boolean(yes);if(!yes)$('start').disabled=true;},
  setWallet(address){mockAddress=address;if(!address){myMarble=null;return;}const p=entrants.find(x=>x.wallet?.toLowerCase()===address.toLowerCase()||x.name.toLowerCase()===(address.slice(0,6)+'…'+address.slice(-4)).toLowerCase());if(p){myMarble=p;syncPlayerPreview()}},
  applyRoom(next,wallet){
   if(!next)return;
