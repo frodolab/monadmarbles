@@ -71,3 +71,15 @@ MONAD_MIN_CONFIRMATIONS=2
 All are public values; **no private keys** are required for read-only verification.
 The new verification tests use in-memory mocked chain responses, so they do not
 make live RPC calls or spend MON.
+
+### Read-only backend endpoint
+
+When `MONAD_CONTRACT_ADDRESS` is configured, `GET /chain/status` validates
+the RPC chain ID, contract bytecode, and `owner()`, then reports the active
+on-chain race and fee. With no contract env var, the endpoint returns HTTP 503
+and the existing demo races continue normally.
+
+This is only a **readiness check**. No `joinRace` transactions or paid entries
+are enabled in the web UI or accepted by Socket.IO. The next implementation
+step must apply verified events idempotently to the shared lobby and recover
+all registered wallets after an outage.

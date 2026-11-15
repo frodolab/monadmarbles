@@ -5,6 +5,9 @@ const http = require("http");
 const { randomUUID } = require("crypto");
 const { Server } = require("socket.io");
 const { RaceEngine } = require("./physics");
+const { createVerifier, readChainConfig } = require("./chain-verifier");
+const chainConfig = readChainConfig();
+const chainVerifier = chainConfig ? createVerifier(chainConfig) : null;
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -153,6 +156,36 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "monad-marbles-race-server", authoritativePhysics: true, sessionId: serverSessionId });
 });
 app.get("/state", (_req, res) => res.json(snapshot()));
+
+// Read-only health and synchronization preparation; NOT a paid entry endpoint.
+// Deliberately disabled unless the configured address is explicitly supplied.
+app.get("/chain/status", async (_req, res) => {
+  if (!chainVerifier) {
+    return res.status(503).json({
+      enabled: false,
+      status: "disabled",
+      message: "MONAD_CONTRACT_ADDRESS is not configured. Demo-only server.",
+    });
+  }
+  try {
+    const network = await chainVerifier.assertNetwork();
+    const activeRace = await chainVerifier.activeRace();
+    return res.json({
+      enabled: true,
+      status: "read-only",
+      network,
+      activeRace,
+      message: "Registration admission is not enabled yet. Do not send entry payments through this server.",
+    });
+  } catch (error) {
+    console.error("Monad read-only readiness failed:", error);
+    return res.status(503).json({
+      enabled: true,
+      status: "unavailable",
+      message: "Could not verify Monad Testnet RPC or contract state.",
+    });
+  }
+});
 
 io.on("connection", (socket) => {
   console.log("Spectator connected", socket.id);
