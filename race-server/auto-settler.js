@@ -69,10 +69,15 @@ function createAutoSettler({
   onUpdate = () => {},
 } = {}) {
   const contractAddress = env.MONAD_CONTRACT_ADDRESS;
-  const privateKey = env.MONAD_SETTLER_PRIVATE_KEY;
+  // Normalize legitimate MetaMask exports and quoted Railway paste values.
+  // Never print the value or return it in errors.
+  const suppliedKey = typeof env.MONAD_SETTLER_PRIVATE_KEY === "string"
+    ? env.MONAD_SETTLER_PRIVATE_KEY.trim().replace(/^["']|["']$/g, "").trim() : "";
+  const privateKey = /^[0-9a-fA-F]{64}$/.test(suppliedKey)
+    ? "0x" + suppliedKey : suppliedKey;
   const directory = env.MONAD_SETTLEMENT_DIR;
   assertValue(addressRegex.test(contractAddress || ""), "Automatic settlement requires a valid MONAD_CONTRACT_ADDRESS.");
-  assertValue(keyRegex.test(privateKey || ""), "Automatic settlement requires MONAD_SETTLER_PRIVATE_KEY.");
+  assertValue(keyRegex.test(privateKey || ""), "Invalid MONAD_SETTLER_PRIVATE_KEY format: expected a 32-byte hexadecimal key.");
   assertValue(directory && path.isAbsolute(directory), "MONAD_SETTLEMENT_DIR must be an absolute mounted volume directory.");
   if (env.RAILWAY_ENVIRONMENT && !directory.startsWith("/data")) {
     throw new Error("Railway auto-payout requires a dedicated /data-mounted volume for durable winner records.");
