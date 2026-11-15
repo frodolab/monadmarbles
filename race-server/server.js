@@ -1,5 +1,5 @@
-// Beta 3: server-authoritative rigid-body race and shared spectator playback.
-// Entries and prize pools remain mock/test-only; no wallet payments are accepted.
+// Monad Marbles: server-authoritative physics, verified paid entry, optional
+// V2 atomically automatic on-chain prize settlement from a durable winner log.
 const express = require("express");
 const http = require("http");
 const { randomUUID } = require("crypto");
@@ -7,13 +7,18 @@ const { Server } = require("socket.io");
 const { RaceEngine } = require("./physics");
 const { createVerifier, readChainConfig } = require("./chain-verifier");
 const { ChainAdmission } = require("./chain-admission");
+const { createAutoSettler } = require("./auto-settler");
 const chainConfig = readChainConfig();
 const chainVerifier = chainConfig ? createVerifier(chainConfig) : null;
 // A contract address alone only enables read-only status. Paid mode must be
 // enabled explicitly in a separate test environment.
 const paidMode = process.env.MONAD_ENTRY_MODE === "onchain";
+const autoPayoutEnabled = process.env.MONAD_AUTOPAYOUT_ENABLED === "true";
 if (paidMode && !chainVerifier) {
   throw new Error("MONAD_ENTRY_MODE=onchain requires MONAD_CONTRACT_ADDRESS.");
+}
+if (autoPayoutEnabled && !paidMode) {
+  throw new Error("Automatic settlement requires on-chain entry mode.");
 }
 
 const app = express();
@@ -45,16 +50,32 @@ let room = {
   entries: [],
   winnerId: null,
   finishOrder: [],
+  payout: null,
 };
 let countdownTimer = null;
 let physicsTimer = null;
 let engine = null;
 let lastRaceFrame = null;
+// Disabled on the V1 production/staging contract. Enabling requires a separate
+// V2 address, owner-authorized low-value relayer, and Railway volume.
+const autoSettler = autoPayoutEnabled ? createAutoSettler({
+  onUpdate: (status) => {
+    if (room.phase === "finished" && room.chainRaceId === status.raceId) {
+      room.payout = status;
+      broadcast();
+    }
+  },
+}) : null;
+
 const chainAdmission = paidMode ? new ChainAdmission({
   verifier: chainVerifier,
   onChange: (chainState, paidEntries) => {
     const newRace = room.chainRaceId !== chainState.chainRaceId;
-    if (newRace) {
+    // After V2 pays out, activeRaceId becomes 0. Keep the finished results
+    // on screen until the organizer manually creates the NEXT on-chain race.
+    const preserveFinished = Boolean(autoSettler && room.phase === "finished" &&
+      chainState.chainRaceId === null);
+    if (newRace && !preserveFinished) {
       stopTimers();
       room = {
         roundId: room.roundId + 1,
@@ -65,12 +86,13 @@ const chainAdmission = paidMode ? new ChainAdmission({
         entries: [],
         winnerId: null,
         finishOrder: [],
+        payout: null,
       };
     }
 
     // Only canonical on-chain events can populate the paid roster.
     // Never let a failed RPC response create unconfirmed entries.
-    room.entries = paidEntries;
+    if (!preserveFinished) room.entries = paidEntries;
     if (room.phase === "lobby" || room.phase === "waiting") {
       if (chainState.status === "interrupted") room.phase = "interrupted";
       else if (chainState.status === "waiting") room.phase = "waiting";
@@ -94,6 +116,7 @@ function snapshot() {
     demoEntryFee,
     demoOnly: !paidMode,
     blockchain: chainAdmission ? chainAdmission.snapshot : null,
+    payout: room.payout || null,
     authoritativePhysics: true,
     serverTime: Date.now(),
   };
@@ -138,6 +161,29 @@ function finishRace() {
   room.winnerId = engine.winnerId;
   room.finishOrder = [...engine.finishOrder];
 
+  if (autoSettler) {
+    try {
+      const decision = autoSettler.recordWinner({
+        chainRaceId: room.chainRaceId,
+        winnerId: room.winnerId,
+        entries: room.entries,
+        serverRaceId: room.raceId,
+        serverSessionId,
+      });
+      room.payout = autoSettler.summary();
+      console.log("Durably recorded automatic testnet payout", {
+        raceId: decision.raceId, winningEntryId: decision.winningEntryId,
+      });
+    } catch (error) {
+      console.error("CRITICAL: winner journal could not be persisted; payout locked:", error);
+      room.payout = {
+        enabled: true, status: "error", raceId: room.chainRaceId,
+        error: "The winning result could not be durably recorded. Cancel/refund or reconcile manually.",
+      };
+      io.emit("race:error", "Automatic payout blocked: durable winner record failed. Contact the operator.");
+    }
+  }
+
   // Send final positions and winner to every spectator, including those joining late.
   lastRaceFrame = officialFrame(finishedRound);
   io.emit("race:snapshot", lastRaceFrame);
@@ -156,6 +202,9 @@ function finishRace() {
   physicsTimer = null;
   engine.dispose();
   engine = null;
+  if (autoSettler) void autoSettler.tick().catch(error => {
+    console.error("Automatic testnet settlement tick failed:", error.message);
+  });
 }
 
 async function beginRace(roundId) {
@@ -172,6 +221,7 @@ async function beginRace(roundId) {
         return;
       }
     }
+    if (autoSettler) await autoSettler.assertReady();
     const race = await RaceEngine.create([...room.entries]);
     if (room.roundId !== roundId || room.phase !== "countdown") {
       race.dispose();
@@ -232,6 +282,7 @@ app.get("/chain/status", async (_req, res) => {
       network,
       activeRace,
       admission: chainAdmission ? chainAdmission.snapshot : null,
+      autoSettlement: autoSettler ? autoSettler.summary() : { enabled: false },
       message: paidMode
         ? "Confirmed entry events determine marble admission; on-chain race closing is required before starting."
         : "Registration admission is not enabled. Do not send entry payments through this server.",
@@ -328,6 +379,14 @@ io.on("connection", (socket) => {
         return reply(ack, false, "Cannot start while Monad Testnet verification is unavailable.");
       }
     }
+    if (autoSettler) {
+      try {
+        await autoSettler.assertReady();
+      } catch (error) {
+        console.error("Cannot start paid auto-payout race:", error.message);
+        return reply(ack, false, "Automatic payout is not ready. Check the authorized settler, RPC, and gas balance.");
+      }
+    }
     room.phase = "countdown";
     room.startsAt = Date.now() + countdownMs;
     const roundId = room.roundId;
@@ -349,6 +408,7 @@ io.on("connection", (socket) => {
       entries: [],
       winnerId: null,
       finishOrder: [],
+      payout: null,
     };
     reply(ack, true);
     broadcast();
@@ -371,5 +431,13 @@ httpServer.listen(PORT, "0.0.0.0", () => {
     const interval = setInterval(() => void sync(), 5000);
     interval.unref();
     console.log("On-chain admission enabled: demo join/reset/fill disabled and race start requires contract close.");
+  }
+  if (autoSettler) {
+    const settle = () => autoSettler.tick().catch(error =>
+      console.error("Auto-payout poll failed:", error.message));
+    void settle();
+    const settlementTimer = setInterval(() => void settle(), 7000);
+    settlementTimer.unref();
+    console.log("V2 automatic settlement worker enabled (durable journal, no payout buttons).");
   }
 });

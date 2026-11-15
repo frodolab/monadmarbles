@@ -165,7 +165,7 @@ export default function App() {
                 <span>Race #{chainOverview.activeRaceId} · {chainOverview.entryCount}/{chainOverview.maxEntries} registered · {chainOverview.feeMON} testnet MON / entry</span>
               )}
               <small>{onchain
-                ? "Verified payment entries are enabled. Winner settlement/claim is not automated yet."
+                ? "Verified payment entries. V2 auto-payout is enabled only when the backend is configured with the authorized settler."
                 : "Wallet read-only preview. The server has not enabled blockchain payments."}</small>
             </div>
             {chainMessage && <p className="fine-print">{chainMessage}</p>}
@@ -267,8 +267,26 @@ export default function App() {
             <strong>{room.phase === "lobby" ? "OPEN FOR ENTRIES" : room.phase === "countdown" ? "STARTING" : room.phase === "finished" ? "FINISHED" : room.phase === "interrupted" ? "RECOVERY LOCKED" : room.phase === "waiting" ? "AWAITING ON-CHAIN RACE" : "RACING"}</strong>
           </div>
           <p className="fine-print">{onchain
-            ? "*Actual testnet MON escrow. Winner payout requires on-chain finalization; cancel/refund if interrupted."
+            ? (room.payout?.enabled
+              ? "*Testnet MON is paid directly to the winning wallet by the contract after the server reports the official result."
+              : "*Actual testnet MON escrow. V1 still requires manual settlement; cancel/refund if interrupted.")
             : "*Illustrative testnet pool. No actual MON is deposited."}</p>
+          {onchain && room.payout?.enabled && room.payout.raceId && (
+            <div className="wallet-onchain" role="status">
+              <div className="wallet-onchain-title">ON-CHAIN AUTOMATIC PAYOUT</div>
+              <p className="fine-print">{room.payout.status === "paid"
+                ? "Prize paid automatically to " + room.payout.winnerWallet
+                : room.payout.status === "submitted"
+                  ? "Payout transaction sent. Awaiting on-chain confirmation."
+                  : room.payout.status === "recorded"
+                    ? "Winner recorded. Automatic payout is being submitted."
+                    : room.payout.error || "Settlement is being reconciled from the on-chain result."}</p>
+              {room.payout.txHash && (
+                <a href={"https://testnet.monadexplorer.com/tx/" + room.payout.txHash}
+                  target="_blank" rel="noreferrer">View payout transaction on Monad Explorer</a>
+              )}
+            </div>
+          )}
 
           <label htmlFor="pin">OPERATOR PIN</label>
           <input
@@ -309,7 +327,7 @@ export default function App() {
           </p>
           <p className="muted explanation">
             {onchain
-              ? "Only confirmed on-chain entrants get marbles. Manual 10-second countdown remains unchanged. Settlement is not automated yet."
+              ? "Only confirmed on-chain entrants get marbles. The 10-second countdown is still manual. With V2 enabled, a dedicated server relayer triggers payout immediately after the winner is declared."
               : "All browsers use the same authoritative race result. Demo entries are simulated."}
           </p>
         </aside>
@@ -317,7 +335,9 @@ export default function App() {
 
       <footer className="footer">
         <span>MONAD MARBLES / HACKATHON PROTOTYPE</span>
-        <span>{onchain ? "TESTNET MON ENTRIES · PAYOUTS REQUIRE SETTLEMENT" : "DEMO MODE · NO PAYMENT REQUIRED"}</span>
+        <span>{onchain
+  ? (room.payout?.enabled ? "TESTNET MON ENTRIES · AUTOMATIC WINNER PAYOUT" : "TESTNET MON ENTRIES · V1 MANUAL SETTLEMENT")
+  : "DEMO MODE · NO PAYMENT REQUIRED"}</span>
       </footer>
     </div>
   );

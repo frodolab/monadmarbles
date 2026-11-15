@@ -37,6 +37,17 @@ export interface ChainStatus {
   message: string;
 }
 
+export interface PayoutStatus {
+  enabled: boolean;
+  status: string;
+  raceId?: string | null;
+  winningEntryId?: string | null;
+  winnerWallet?: string | null;
+  txHash?: string | null;
+  readiness?: string;
+  error?: string | null;
+}
+
 export interface RoomState {
   roundId: number;
   raceId?: string;
@@ -49,6 +60,7 @@ export interface RoomState {
   demoOnly: boolean;
   chainRaceId?: string | null;
   blockchain?: ChainStatus | null;
+  payout?: PayoutStatus | null;
   authoritativePhysics?: boolean;
   winnerId?: string | null;
   finishOrder?: string[];

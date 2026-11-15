@@ -228,3 +228,14 @@ Pending settlement transactions are never blindly resubmitted.
 
 The existing V1 contract `0x9fB46...` and its paid staging service continue
 to function unchanged until V2 is deployed, tested, and explicitly cut over.
+
+### Payout UI and fail-closed behavior
+
+The authoritative server only calls the relayer after the 3D physics engine
+determines a winner and the winner's exact on-chain entry ID is synchronously
+fsynced to the `/data` journal. The site shows payout progress/receipt
+and **never** exposes a Finalize Winner or Claim Winnings button. The paid
+race cannot start unless the signer is authorized by the NEW V2 contract,
+holds >=0.01 testnet MON for gas, and the contract advertises AUTO_PAYOUT.
+If no durable result exists following a crash, the server **must not guess a
+winner**; owners should cancel that closed race and entrants claim refunds.
