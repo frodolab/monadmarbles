@@ -19,6 +19,9 @@ jobs:
       - name: Verify frontend TypeScript and production build
         working-directory: web
         run: npm run build
+      - name: Test synchronized countdown independently of laptop wall clocks
+        working-directory: web
+        run: npm test
       - name: Install backend dependencies
         working-directory: race-server
         run: npm install --no-audit --no-fund

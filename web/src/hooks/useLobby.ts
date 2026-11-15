@@ -12,6 +12,7 @@ const serverUrl = configuredUrl || (import.meta.env.DEV ? "http://localhost:3001
 export function useLobby() {
   const [room, setRoom] = useState<RoomState>(() => newLocalRoom());
   const [frame, setFrame] = useState<RaceFrame | null>(null);
+  const [countdownAnchor, setCountdownAnchor] = useState<{ remainingMs: number; receivedAt: number } | null>(null);
   const [mode, setMode] = useState<Mode>(serverUrl ? "connecting" : "local");
   const socketRef = useRef<Socket | null>(null);
   const roomRef = useRef(room);
@@ -29,17 +30,44 @@ export function useLobby() {
     });
     socketRef.current = socket;
 
-    socket.on("connect", () => setMode("shared"));
-    socket.on("disconnect", () => setMode("local"));
-    socket.on("connect_error", () => setMode("local"));
+    socket.on("connect", () => {
+      // Wait for a fresh server snapshot before showing any previous result.
+      setMode("connecting");
+      setFrame(null);
+      setCountdownAnchor(null);
+    });
+    socket.on("disconnect", () => {
+      setMode("connecting");
+      setFrame(null);
+      setCountdownAnchor(null);
+    });
+    socket.on("connect_error", () => setMode("connecting"));
     socket.on("lobby:state", (next: RoomState) => {
-      if (next.roundId !== roomRef.current.roundId) setFrame(null);
+      const old = roomRef.current;
+      if (next.roundId !== old.roundId || next.sessionId !== old.sessionId || next.raceId !== old.raceId) {
+        setFrame(null);
+      }
+      // Uses time remaining at the server, anchored to monotonic browser time.
+      // A laptop's inaccurate wall clock therefore cannot shift the countdown.
+      if (next.phase === "countdown" && next.startsAt !== null && typeof next.serverTime === "number") {
+        setCountdownAnchor({
+          remainingMs: Math.max(0, next.startsAt - next.serverTime),
+          receivedAt: performance.now(),
+        });
+      } else {
+        setCountdownAnchor(null);
+      }
       roomRef.current = next;
       setRoom(next);
+      setMode("shared");
     });
     socket.on("race:snapshot", (next: RaceFrame) => {
-      if (next.roundId !== roomRef.current.roundId) return;
-      setFrame((old) => old && old.roundId === next.roundId && old.tick > next.tick ? old : next);
+      if (next.roundId !== roomRef.current.roundId ||
+          next.sessionId !== roomRef.current.sessionId ||
+          next.raceId !== roomRef.current.raceId) return;
+      setFrame((old) => old && old.roundId === next.roundId &&
+        old.sessionId === next.sessionId && old.raceId === next.raceId &&
+        old.tick > next.tick ? old : next);
     });
     socket.on("race:error", (message: string) => {
       console.error("Shared race error:", message);
@@ -66,6 +94,8 @@ export function useLobby() {
         return { ok: false, error: "The server did not respond. Try again." };
       }
     }
+
+    if (serverUrl) return { ok: false, error: "Disconnected from the shared server. Reconnect before continuing." };
 
     const current = roomRef.current;
     if (event === "lobby:join") {
@@ -108,6 +138,7 @@ export function useLobby() {
 
     if (event === "lobby:reset") {
       setFrame(null);
+      setCountdownAnchor(null);
       updateLocal(newLocalRoom(current.roundId + 1));
       return { ok: true };
     }
@@ -118,6 +149,7 @@ export function useLobby() {
   return {
     room,
     frame,
+    countdownAnchor,
     mode,
     hasServerUrl: Boolean(serverUrl),
     join: (nickname: string, design: number) => action("lobby:join", { nickname, design }),

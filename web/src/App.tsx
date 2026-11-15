@@ -3,19 +3,20 @@ import BowlScene from "./components/BowlScene";
 import RaceScene from "./components/RaceScene";
 import { DESIGNS } from "./game";
 import { useLobby } from "./hooks/useLobby";
+import { countdownSeconds } from "./utils/countdown";
 
 export default function App() {
-  const { room, frame, mode, hasServerUrl, join, fill, start, reset } = useLobby();
+  const { room, frame, countdownAnchor, mode, hasServerUrl, join, fill, start, reset } = useLobby();
   const [nickname, setNickname] = useState("");
   const [designIndex, setDesignIndex] = useState(0);
   const [operatorPin, setOperatorPin] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [autoFollow, setAutoFollow] = useState(true);
-  const [clock, setClock] = useState(Date.now());
+  const [clock, setClock] = useState(() => performance.now());
 
   useEffect(() => {
-    const timer = window.setInterval(() => setClock(Date.now()), 120);
+    const timer = window.setInterval(() => setClock(performance.now()), 80);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -27,9 +28,7 @@ export default function App() {
   const isLobby = room.phase === "lobby";
   const showingRace = room.phase === "racing" || room.phase === "finished";
   const pool = (room.entries.length * room.demoEntryFee).toFixed(1);
-  const countdown = room.startsAt === null
-    ? 0
-    : Math.max(0, Math.ceil((room.startsAt - clock) / 1000));
+  const countdown = room.phase === "countdown" ? countdownSeconds(countdownAnchor, clock) : 0;
   const winner = useMemo(
     () => room.entries.find((entry) => entry.id === room.winnerId),
     [room.entries, room.winnerId],
@@ -65,13 +64,13 @@ export default function App() {
         <div className="brand">
           <div className="brand-logo">M</div>
           <div>
-            <div className="eyebrow">MONAD BLITZ · BETA 3</div>
+            <div className="eyebrow">MONAD BLITZ · BETA 3.1 · SYNC FIX</div>
             <h1>MONAD <span>MARBLES</span></h1>
           </div>
         </div>
         <div className={"connection " + (mode === "shared" ? "online" : "offline")}>
           <span className="dot" />
-          {mode === "shared" ? "LIVE · SHARED PHYSICS" : mode === "connecting" ? "CONNECTING…" : "LOCAL DEMO · NOT SHARED"}
+          {mode === "shared" ? "LIVE · SHARED PHYSICS" : mode === "connecting" ? "RECONNECTING · RESULTS PAUSED" : "LOCAL DEMO · NOT SHARED"}
         </div>
       </header>
 
@@ -113,7 +112,7 @@ export default function App() {
           <button
             className="primary-button"
             type="button"
-            disabled={!isLobby || busy || room.entries.length >= room.maxPlayers}
+            disabled={!isLobby || busy || room.entries.length >= room.maxPlayers || (hasServerUrl && mode !== "shared")}
             onClick={() => void addMarble()}
           >+ JOIN DEMO RACE</button>
           <p className="fine-print">No wallet · No actual MON · No payment is collected</p>
@@ -145,7 +144,7 @@ export default function App() {
           </div>
           <div className="arena-heading">
             <span className="stage-label">{room.phase === "finished" ? "THE RACE HAS FINISHED" : room.phase === "racing" ? "THE RACE IS ON" : room.phase === "countdown" ? "GET READY TO DROP" : "THE WAITING BOWL"}</span>
-            <span className="round-label">ROUND #{String(room.roundId).padStart(3, "0")}</span>
+            <span className="round-label">ROUND #{String(room.roundId).padStart(3, "0")} · SESSION {room.sessionId?.slice(0, 8).toUpperCase() || "OFFLINE"}</span>
           </div>
 
           {room.phase === "countdown" && (
@@ -164,13 +163,16 @@ export default function App() {
           {showingRace && (
             <div className="winner-card">
               <small>FIRST TO FINISH · OFFICIAL SERVER RESULT</small>
-              {winner ? (
-                <strong><span style={{ background: DESIGNS[winner.design]?.color }} />{winner.nickname} wins!</strong>
+              {mode !== "shared" ? (
+                <strong>Reconnecting to the official race server…</strong>
+              ) : winner ? (
+                <strong><span style={{ background: DESIGNS[winner.design]?.color }} />{winner.nickname} wins! <small>#{winner.id.slice(0, 8)}</small></strong>
               ) : room.phase === "finished" ? (
                 <strong>No finisher · Race timed out</strong>
               ) : (
                 <strong>Race in progress…</strong>
               )}
+              <div className="official-race-id">RACE {room.raceId?.slice(0, 8).toUpperCase() || "PENDING"} · SERVER {room.sessionId?.slice(0, 8).toUpperCase() || "OFFLINE"}</div>
               <button className="camera-button" type="button" onClick={() => setAutoFollow((v) => !v)}>
                 {autoFollow ? "Switch to free camera" : "Follow top 12 marbles"}
               </button>
@@ -215,7 +217,7 @@ export default function App() {
           />
           <button
             className="secondary-button"
-            disabled={!isLobby || busy || room.entries.length >= room.maxPlayers}
+            disabled={!isLobby || busy || room.entries.length >= room.maxPlayers || (hasServerUrl && mode !== "shared")}
             onClick={() => void operate(() => fill(operatorPin, 8), "Eight demo marbles requested.")}
           >+ ADD 8 DEMO MARBLES</button>
           <button
@@ -225,7 +227,7 @@ export default function App() {
           >▶ START RACE</button>
           <button
             className="outline-button"
-            disabled={busy}
+            disabled={busy || (hasServerUrl && mode !== "shared")}
             onClick={() => void operate(() => reset(operatorPin), "Lobby reset. Ready for the next round.")}
           >↻ RESET LOBBY</button>
           {notice && <p className="notice" role="status">{notice}</p>}
@@ -236,7 +238,7 @@ export default function App() {
             {mode === "shared"
               ? "The Railway server calculates the official marble physics and broadcasts positions to all spectators."
               : hasServerUrl
-                ? "The shared server is unreachable. Actions run locally until the connection is restored."
+                ? "The shared server is unreachable. Race controls are paused until reconnection."
                 : "No race-server URL is configured. This is a local-only demo."}
           </p>
           <p className="muted explanation">

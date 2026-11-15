@@ -21,6 +21,8 @@ export interface Entry {
 
 export interface RoomState {
   roundId: number;
+  raceId?: string;
+  sessionId?: string;
   phase: Phase;
   startsAt: number | null;
   entries: Entry[];
@@ -47,6 +49,8 @@ export interface MarbleFrame {
 
 export interface RaceFrame {
   roundId: number;
+  raceId?: string;
+  sessionId?: string;
   tick: number;
   elapsed: number;
   winnerId: string | null;
