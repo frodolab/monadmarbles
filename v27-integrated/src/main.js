@@ -6,8 +6,10 @@ const root=document.querySelector('#app');
 root.innerHTML=`<div id="scene"></div><div class="logo clean-race-logo" aria-label="Monad Marbles"><span class="race-monad">M<img src="/monad-symbol.png" alt="O"/>NAD</span> <span class="race-marbles">MARBLES</span></div><div class="pool" id="pool"><span class="pool-monad" aria-hidden="true"><span class="pool-monad-inner"></span></span><span class="race-pool-stack"><small>PRIZE POOL</small><strong id="poolValue">0.0 MON</strong><small id="count">0 ENTRIES</small><small class="race-preview-notice">LOCAL PREVIEW · NO DEPOSITS</small></span></div><div class="panel left" id="playerInfo"><h2>✨ YOUR MARBLE</h2><div id="myMarble">Loading racer…</div><p class="muted">Your marble is highlighted with a golden glow.</p><a href="/" class="back">← Back to lobby</a></div><div class="panel right"><div class="row"><h2>🏆 Top 5</h2><span class="muted" id="timer">LOBBY</span></div><div id="board" class="muted">Add racers to begin.</div></div><div class="actions" style="display:none"><button id="start">▶ START RACE</button><button class="pink" id="reset">↻ BACK TO LOBBY</button><span class="muted" id="phase">Waiting for racers</span></div><div class="camera-ui"><label for="cameraMode">🎥 CAMERA</label><select id="cameraMode"><option value="leaders">Follow leaders</option><option value="mine">Follow my marble</option><option value="wide">Wide cinematic</option></select></div><div class="status" id="fps">Loading spiral physics…</div><div class="toast" id="toast"></div><div class="finish" id="finish" role="dialog" aria-label="Race results"><div class="podium-header"><small>MONAD MARBLES · RACE RESULTS</small><h1>🏆 THE WINNER</h1><div class="winnings"><span>✦ FIRST PLACE ✦</span><strong id="winningAmount">0.0 MON</strong></div></div><div class="podium-bottom"><div class="podium-labels" id="podiumLabels"></div><div class="podium-actions"><p>Top three marbles · Local preview · No actual payouts</p><button id="again">↻ NEW RACE</button></div></div></div>`;
 const $=s=>document.querySelector(s), COLORS=['#ff5ba4','#ff914e','#ffdc55','#5ae6c0','#6092ff','#a582f5','#ef5d6d','#a7e66e','#ffb7a0','#e798ec','#76dbf4','#3c467b','#906cf1','#e7af40'];
 const handoff=(()=>{try{return JSON.parse(sessionStorage.getItem('monadMarblesRace')||'null')}catch{return null}})();
+const livePreview=handoff?.livePreview===true;
 const viewerId=handoff?.viewerMarbleId??handoff?.participants?.find(p=>!p.isBot)?.id??null;
 const MAX=60, ENTRY=.1, R=.57, STEP=1/60, LENGTH=300, TRACK_WIDTH=13.5;
+let latestOfficialFrame=null;let lastOfficialTick=-1;
 const SPINNER_SPEED=1.8, JUMP_AT=185, MAX_RACE_SECONDS=105;
 let selected=0,players=[],phase='lobby',elapsed=0,finished=[],connected=null,world,gateBody,funnelVisual,trackObjects=[],obstacles=[],last=performance.now(),acc=0,frameCount=0,fpsTime=0,releaseTime=0;
 // Preserve the five V34 visual themes; map choice changes color, not physics geometry.
@@ -323,7 +325,7 @@ function showPodium(){
  const summary=$('#podiumLabels');
  summary.innerHTML=[2,1,3].map(place=>{
   const racer=finished[place-1];
-  return `<div class="podium-label ${place===1?'podium-first':''}"><span>${['🥇','🥈','🥉'][place-1]} ${place===1?'OFFICIAL WINNER':handoff?.livePreview?'VISUAL PREVIEW':place===2?'RUNNER UP':'THIRD PLACE'}</span><strong>${racer?escapeHTML(racer.name):'—'}</strong></div>`;
+  return `<div class="podium-label ${place===1?'podium-first':''}"><span>${['🥇','🥈','🥉'][place-1]} ${place===1?'OFFICIAL WINNER':place===2?'OFFICIAL RUNNER UP':'OFFICIAL THIRD'}</span><strong>${racer?escapeHTML(racer.name):'—'}</strong></div>`;
  }).join('');
  $('#winningAmount').textContent=(players.length*ENTRY).toFixed(1)+' DEMO MON';
  $('#finish').style.display='flex';
@@ -357,10 +359,10 @@ function applyOfficialResult(data){
  const winner=byId.get(data.winnerId)||null;
  if(!winner){toast('Waiting for official winner data');return;}
  // First place comes exclusively from the authoritative server.
- // Remaining places are progress-based placeholders, NOT official finishes.
+ // Only ranks explicitly recorded by the server appear on the podium.
+ // No local progress estimate may grant second or third place.
  const seen=new Set([winner.id]);
- const runners=[...official.slice(1).map(id=>byId.get(id)).filter(Boolean),
-  ...players.filter(p=>p.id!==winner.id).sort((a,b)=>b.progress-a.progress)]
+ const runners=official.slice(1).map(id=>byId.get(id)).filter(Boolean)
   .filter(p=>{if(seen.has(p.id))return false;seen.add(p.id);return true});
  finished=[winner,...runners].slice(0,3);
  finished.forEach((p,i)=>{p.finished=true;p.rank=i+1;});
@@ -369,9 +371,42 @@ function applyOfficialResult(data){
  if(window.parent!==window)window.parent.postMessage({type:'monadmarbles:race-finished'},location.origin);
  else showPodium();
 }
+function applyOfficialFrame(frame){
+ if(!livePreview||frame?.course!=='v27'||!Array.isArray(frame.marbles))return;
+ if(frame.tick<lastOfficialTick)return;
+ lastOfficialTick=frame.tick;
+ latestOfficialFrame=frame;
+ elapsed=Number(frame.elapsed)||0;
+ for(const sample of frame.marbles){
+  const p=players.find(player=>player.id===sample.id);
+  if(!p)continue;
+  p.serverTarget=new THREE.Vector3(sample.x,sample.y,sample.z);
+  p.serverRotation=new THREE.Quaternion(sample.qx,sample.qy,sample.qz,sample.qw);
+  p.progress=(Number(sample.progress)||0)*LENGTH;
+ }
+ if(typeof frame.upperTip==='number'&&upperBowlMesh){
+  upperBowlMesh.quaternion.setFromAxisAngle(new THREE.Vector3(0,0,1),-frame.upperTip);
+ }
+ if(Array.isArray(frame.obstacleAngles)){
+  obstacles.forEach((obstacle,index)=>{
+   const angle=frame.obstacleAngles[index];
+   if(Number.isFinite(angle))obstacle.mesh.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),angle);
+  });
+ }
+ if(phase==='release'||phase==='race'){
+  phase=frame.stage==='release'?'release':'race';
+  updateUI();
+  $('#timer').textContent=elapsed.toFixed(1)+'s';
+ }
+}
 window.addEventListener('message',event=>{
  if(event.origin!==location.origin||event.source!==window.parent)return;
- if(event.data?.type==='monadmarbles:race-start'&&phase==='lobby'){$('#start').click();if(pendingOfficial)applyOfficialResult(pendingOfficial)}
+ if(event.data?.type==='monadmarbles:race-frame'){applyOfficialFrame(event.data.frame)}
+ if(event.data?.type==='monadmarbles:race-start'&&phase==='lobby'){
+  $('#start').click();
+  if(livePreview&&latestOfficialFrame)applyOfficialFrame(latestOfficialFrame);
+  if(pendingOfficial)applyOfficialResult(pendingOfficial)
+ }
  if(event.data?.type==='monadmarbles:official-result'){applyOfficialResult(event.data)}
  if(event.data?.type==='monadmarbles:podium-show'&&phase==='done'&&!podiumVisible){
   // Only reveal podium AFTER the persistent V34 curtain has fully covered us.
@@ -500,7 +535,7 @@ function updateCamera(delta){
  if(phase==='lobby'||phase==='release'){
    target=new THREE.Vector3(0,11,-4);desired=new THREE.Vector3(19,23,23);
  }else if(mode==='mine'&&players.some(p=>p.isViewer&&!p.finished)){
-   const p=players.find(p=>p.isViewer&&!p.finished),t=p.body.translation();
+   const p=players.find(p=>p.isViewer&&!p.finished),t=livePreview?p.mesh.position:p.body.translation();
    target=new THREE.Vector3(t.x,t.y,t.z);desired=target.clone().add(new THREE.Vector3(10,12,16));
  }else{
    const leaders=players.filter(p=>!p.finished).sort((a,b)=>b.progress-a.progress).slice(0,mode==='wide'?12:5);
@@ -520,7 +555,25 @@ function render(now){requestAnimationFrame(render);const delta=Math.min(.05,(now
  // Freeze Rapier after the final ranking; it must not keep stepping the entire
  // 60-player world under the podium animation.
  let steps=0;
- if(phase!=='done'){acc+=delta;while(acc>=STEP&&steps<3){updatePhysics();acc-=STEP;steps++;if(phase==='done')break}if(steps===3)acc=Math.min(acc,STEP)}else acc=0;
+ if(livePreview){
+  // Spectator-only: NO local physics steps. The backend is the sole authority.
+  // Ease the 12 Hz official snapshots into smooth 60fps Three.js motion.
+  const alpha=1-Math.exp(-18*Math.min(delta,.1));
+  for(const p of players){
+   if(!p.serverTarget)continue;
+   if(!p.networkInitialized){
+    p.mesh.position.copy(p.serverTarget);
+    p.mesh.quaternion.copy(p.serverRotation);
+    p.networkInitialized=true;
+   }else{
+    p.mesh.position.lerp(p.serverTarget,alpha);
+    p.mesh.quaternion.slerp(p.serverRotation,alpha);
+   }
+  }
+ }else if(phase!=='done'){
+  acc+=delta;while(acc>=STEP&&steps<3){updatePhysics();acc-=STEP;steps++;if(phase==='done')break}
+  if(steps===3)acc=Math.min(acc,STEP);
+ }else acc=0;
  if(phase==='done'&&now-podiumTransitionStart>900)document.body.classList.remove('podium-transition');
  updateCamera(delta);
  if(phase==='done')for(const {mesh,y,place} of podiumMarbles){mesh.rotation.y+=delta*(place===1?.85:.45);mesh.position.y=y+.15*Math.sin(now*.002+place);}
