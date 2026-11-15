@@ -5,6 +5,9 @@ const http = require("http");
 const { randomUUID } = require("crypto");
 const { Server } = require("socket.io");
 const { RaceEngine } = require("./physics");
+const { V27RaceEngine } = require("./v27-physics");
+const raceCourse = process.env.RACE_COURSE === "v27" ? "v27" : "classic";
+const PhysicsEngine = raceCourse === "v27" ? V27RaceEngine : RaceEngine;
 const { createVerifier, readChainConfig } = require("./chain-verifier");
 const { ChainAdmission } = require("./chain-admission");
 const { createAutoSettler } = require("./auto-settler");
@@ -126,6 +129,7 @@ function snapshot() {
     payout: room.payout || null,
     raceClose: paidMode ? { status: closeStatus, txHash: closeTxHash } : null,
     authoritativePhysics: true,
+    course: raceCourse,
     serverTime: Date.now(),
   };
 }
@@ -237,7 +241,7 @@ async function beginRace(roundId) {
       }
     }
     if (autoSettler) await autoSettler.assertReady();
-    const race = await RaceEngine.create([...room.entries]);
+    const race = await PhysicsEngine.create([...room.entries]);
     if (room.roundId !== roundId || room.phase !== "countdown") {
       race.dispose();
       return;
@@ -245,7 +249,7 @@ async function beginRace(roundId) {
 
     engine = race;
     room.phase = "racing";
-    console.log("Race started", { raceId: room.raceId, roundId, players: room.entries.length, sessionId: serverSessionId });
+    console.log("Race started", { raceId: room.raceId, roundId, course: raceCourse, players: room.entries.length, sessionId: serverSessionId });
     broadcast();
 
     lastRaceFrame = officialFrame(roundId);
