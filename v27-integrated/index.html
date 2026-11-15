@@ -728,9 +728,9 @@ $('devForm').addEventListener('submit',async e=>{
  catch(error){$('devError').textContent=error.message;$('devPin').select()}
  finally{unlock.disabled=false}
 });
-function ballCss(c){return `--ball:${c};`}colors.forEach(([name,c],i)=>{const b=document.createElement('button');b.type='button';b.className='choice'+(i===0?' active':'');b.title='Select '+name;b.innerHTML=`<div class="ball" style="${ballCss(c)}"></div><span>${name}</span>`;b.onclick=()=>{if(finished||preRaceActive)return;selected=i;[...choiceRow.children].forEach((x,j)=>x.classList.toggle('active',j===selected));if(myMarble&&!finished){myMarble.index=i;myMarble.color=colors[i][1];syncPlayerPreview();update();toast('Your marble updated for all spectators (local demo)')}b.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'})};choiceRow.appendChild(b)});
+function ballCss(c){return `--ball:${c};`}colors.forEach(([name,c],i)=>{const b=document.createElement('button');b.type='button';b.className='choice'+(i===0?' active':'');b.title='Select '+name;b.innerHTML=`<div class="ball" style="${ballCss(c)}"></div><span>${name}</span>`;b.onclick=()=>{if(finished||preRaceActive)return;if(window.MonadMarblesPreviewBridge?.liveRoom?.demoOnly===false&&myMarble){toast('On-chain marble design is locked after payment.');return;}selected=i;[...choiceRow.children].forEach((x,j)=>x.classList.toggle('active',j===selected));if(myMarble&&!finished){myMarble.index=i;myMarble.color=colors[i][1];syncPlayerPreview();update();toast('Your marble updated for all spectators (local demo)')}b.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'})};choiceRow.appendChild(b)});
 function toast(s){const e=$('toast');e.textContent=s;e.classList.add('show');clearTimeout(toastHandle);toastHandle=setTimeout(()=>e.classList.remove('show'),2300)}
-function update(){const n=entrants.length;$('count').textContent=n;$('pop').style.width=(n/60*100)+'%';const nextPool=(n*.1).toFixed(1);const poolEl=$('pool');const goldPool=$('goldPool');const shouldBump=lastPoolValue!==null&&lastPoolValue!==nextPool;poolEl.textContent=nextPool;if(shouldBump&&goldPool){goldPool.classList.remove('bump');void goldPool.offsetWidth;goldPool.classList.add('bump');clearTimeout(goldPool._bumpTimer);goldPool._bumpTimer=setTimeout(()=>goldPool.classList.remove('bump'),760)}lastPoolValue=nextPool;$('bowlCaption').textContent=raceDone?`Winner: ${raceWinner?.name||'Nobody'}`:raceActive?'Race in progress':n===0?'Waiting for racers':n===1?'1 racer ready':'Ready to race';$('join').disabled=Boolean(myMarble)||n>=60||finished;$('addOne').disabled=n>=60||finished;$('addTen').disabled=n>=60||finished;const recent=entrants.slice(-7).reverse();$('feed').innerHTML=recent.length?recent.map(p=>`<div class="feed-line"><span class="feed-dot" style="--color:${p.color}"></span><span>${esc(p.name)}</span><span class="status">✓ IN</span></div>`).join(''):'<div class="empty">No marbles yet. Be the first to join!</div>'}
+function update(){const n=entrants.length;$('count').textContent=n;$('pop').style.width=(n/60*100)+'%';const nextPool=window.MonadMarblesPreviewBridge?.poolDisplay?.() ?? (n*.1).toFixed(1);const poolEl=$('pool');const goldPool=$('goldPool');const shouldBump=lastPoolValue!==null&&lastPoolValue!==nextPool;poolEl.textContent=nextPool;if(shouldBump&&goldPool){goldPool.classList.remove('bump');void goldPool.offsetWidth;goldPool.classList.add('bump');clearTimeout(goldPool._bumpTimer);goldPool._bumpTimer=setTimeout(()=>goldPool.classList.remove('bump'),760)}lastPoolValue=nextPool;$('bowlCaption').textContent=raceDone?`Winner: ${raceWinner?.name||'Nobody'}`:raceActive?'Race in progress':n===0?'Waiting for racers':n===1?'1 racer ready':'Ready to race';$('join').disabled=Boolean(myMarble)||n>=60||finished;$('addOne').disabled=n>=60||finished;$('addTen').disabled=n>=60||finished;const recent=entrants.slice(-7).reverse();$('feed').innerHTML=recent.length?recent.map(p=>`<div class="feed-line"><span class="feed-dot" style="--color:${p.color}"></span><span>${esc(p.name)}</span><span class="status">✓ IN</span></div>`).join(''):'<div class="empty">No marbles yet. Be the first to join!</div>'}
 function esc(s){return s.replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
 function add(name,index){if(entrants.length>=60||finished)return null;const n=entrants.length,p={id:++idCounter,name:name.slice(0,18),color:colors[index][1],index,slot:n,tBorn:performance.now(),hue:Math.random()};entrants.push(p);particles.push({p,age:0,y:-78-Math.random()*110,vy:0,settled:false,bounces:0,landedAt:0});update();return p}
 const modal=$('walletModal');function closeModal(){modal.classList.remove('open');modal.setAttribute('aria-hidden','true')}function openModal(){modal.classList.add('open');modal.setAttribute('aria-hidden','false')}
@@ -825,7 +825,7 @@ function raceHandoff(){
   viewerMarbleId:myMarble?(myMarble.serverId||'lobby-'+myMarble.id):null,
   participants:entrants.map(p=>({
    id:p.serverId||('lobby-'+p.id), username:p.name, marbleDesign:p.index,
-   color:p.color, isBot:p!==myMarble, walletAddress:p===myMarble?mockAddress:null
+   color:p.color, isBot:!p.wallet && p!==myMarble, walletAddress:p.wallet||((p===myMarble)?mockAddress:null)
   }))
  };
 }
@@ -1093,7 +1093,19 @@ window.MonadMarblesPreviewBridge={
  getOperatorPin(){return devToken||''},
  toast,
  setConnected(yes){this.connected=Boolean(yes);if(!yes)$('start').disabled=true;},
- setWallet(address){mockAddress=address;if(!address){myMarble=null;return;}const p=entrants.find(x=>x.wallet?.toLowerCase()===address.toLowerCase()||x.name.toLowerCase()===(address.slice(0,6)+'…'+address.slice(-4)).toLowerCase());if(p){myMarble=p;syncPlayerPreview()}},
+ setWallet(address){
+  mockAddress=address;
+  if(!address){myMarble=null;return;}
+  const p=entrants.find(x=>x.wallet?.toLowerCase()===address.toLowerCase()||
+    x.name.toLowerCase()===(address.slice(0,6)+'…'+address.slice(-4)).toLowerCase());
+  myMarble=p||null;
+  if(this.liveRoom?.demoOnly===false){
+   $('playerEditor').hidden=false;
+   document.querySelector('.nickname-field').style.display='none';
+   $('playerWallet').textContent=p?'VERIFIED ON-CHAIN MARBLE · DESIGN LOCKED':
+    'CONNECTED: '+shortAddr(address)+' · PICK YOUR MARBLE BEFORE PAYING';
+  }else if(p){syncPlayerPreview()}
+ },
  applyRoom(next,wallet){
   if(!next)return;
   this.liveRoom=next;
@@ -1129,18 +1141,23 @@ window.MonadMarblesPreviewBridge={
   finished=wasFinished;
   if(wallet){
    mockAddress=wallet;
+   if(next.demoOnly===false){
+    $('playerEditor').hidden=false;
+    document.querySelector('.nickname-field').style.display='none';
+    $('playerWallet').textContent='CONNECTED: '+shortAddr(wallet)+' · PICK YOUR MARBLE BEFORE PAYING';
+   }
    myMarble=entrants.find(x=>x.wallet?.toLowerCase()===wallet.toLowerCase() || x.name.toLowerCase()===(wallet.slice(0,6)+'…'+wallet.slice(-4)).toLowerCase())||null;
-   if(myMarble){$('playerEditor').hidden=false;syncPlayerPreview()}
+   if(myMarble){$('playerEditor').hidden=false;syncPlayerPreview();if(next.demoOnly===false)$('playerWallet').textContent='VERIFIED ON-CHAIN MARBLE · DESIGN LOCKED'}
   }
   const isLobby=next.phase==='lobby';
   const isCountdown=next.phase==='countdown';
-  $('join').disabled=!isLobby||Boolean(myMarble)||incoming.length>=next.maxPlayers;
+  $('join').disabled=!isLobby||Boolean(myMarble)||incoming.length>=next.maxPlayers||(next.demoOnly===false&&!this.joinReady?.());
   $('join').textContent=myMarble?'✓ ENTERED':'✦ CONNECT & JOIN PREVIEW ✦';
   $('start').disabled=!isLobby||incoming.length<2;
   $('addOne').disabled=!isLobby;$('addTen').disabled=!isLobby;
   $('count').textContent=String(incoming.length);
   document.querySelector('.entrants-count').lastChild.textContent=' / '+next.maxPlayers+' ENTRIES';
-  $('pool').textContent=(incoming.length*Number(next.demoEntryFee||0.1)).toFixed(1);
+  $('pool').textContent=this.poolDisplay?.()??(incoming.length*Number(next.demoEntryFee||0.1)).toFixed(1);
   if(isCountdown&&!raceActive){
     running=false;finished=true;preRaceActive=true;preRaceLastTs=performance.now();
     preRaceRemaining=Math.max(0,(Number(next.startsAt||0)-Number(next.serverTime||Date.now()))/1000);
@@ -1152,9 +1169,9 @@ window.MonadMarblesPreviewBridge={
   }
   if(next.phase==='finished'&&next.winnerId){this.setOfficialResult({winnerId:next.winnerId,finishOrder:next.finishOrder||[]});}
   update();
-  $('pool').textContent=(incoming.length*Number(next.demoEntryFee||0.1)).toFixed(1);
+  $('pool').textContent=this.poolDisplay?.()??(incoming.length*Number(next.demoEntryFee||0.1)).toFixed(1);
   $('count').textContent=String(incoming.length);
-  $('join').disabled=!isLobby||Boolean(myMarble)||incoming.length>=next.maxPlayers;
+  $('join').disabled=!isLobby||Boolean(myMarble)||incoming.length>=next.maxPlayers||(next.demoOnly===false&&!this.joinReady?.());
   $('start').disabled=!isLobby||incoming.length<2;
  },
  setFrame(frame){
