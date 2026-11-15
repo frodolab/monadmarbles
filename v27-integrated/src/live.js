@@ -1,7 +1,9 @@
 import { io } from 'socket.io-client';
+import { createPaidIntegration, formatWei, testnetExplorerTx, validateOnchainRoom } from './paid.js';
 
 const serverUrl = import.meta.env.VITE_RACE_SERVER_URL?.trim();
 const stage = document.querySelector('.stage');
+const isPaid = () => room?.demoOnly === false;
 const status = document.createElement('div');
 status.id = 'livePreviewStatus';
 status.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:400;background:#252054e8;color:white;border:1px solid #a399ef;border-radius:12px;padding:9px 14px;font:700 12px Nunito,sans-serif;max-width:360px';
@@ -87,6 +89,13 @@ getMetaMaskProvider()?.on?.('accountsChanged', accounts => {
 });
 getMetaMaskProvider()?.on?.('chainChanged', () => notify('Wallet network changed; switch to Monad Testnet'));
 
+const paid = createPaidIntegration({
+  getRoom: () => room,
+  getWallet: () => wallet,
+  getProvider: () => getMetaMaskProvider(),
+  notify,
+  onChanged: () => renderLiveControls(),
+});
 const join = async () => {
   if (waitingToJoin) return;
   waitingToJoin = true;
@@ -94,10 +103,14 @@ const join = async () => {
     if (!wallet) await connectWallet();
     if (hasEntry()) return notify('Your marble is already registered');
     if (room?.phase !== 'lobby') throw new Error('Registration is not open');
-    const nickname = short(wallet);
     const design = ui.getSelectedDesign();
-    await ack('lobby:join', { nickname, design });
-    notify('Preview entry registered · no MON transferred');
+    if (isPaid()) {
+      await paid.join(design);
+    } else {
+      const nickname = short(wallet);
+      await ack('lobby:join', { nickname, design });
+      notify('Free preview entry registered · no MON transferred');
+    }
   } catch (error) { notify(error.message || 'Unable to join'); }
   finally { waitingToJoin = false; }
 };
@@ -108,8 +121,25 @@ ui.verifyOperatorPin = async pin => {
   return true;
 };
 ui.join = join;
+ui.poolDisplay = () => {
+  if (!isPaid()) return (Number(room?.entries?.length || 0) * .1).toFixed(1);
+  return formatWei(room.prizePoolWei || room.blockchain?.poolWei || '0');
+};
+ui.joinReady = () => {
+  if (!isPaid()) return true;
+  try {
+    validateOnchainRoom(room, true);
+    return !paid.busy && !paid.matchesPending();
+  } catch { return false; }
+};
+ui.getPendingPayment = () => paid.pending;
 ui.fill = async (pin, count) => {
-  try { await ack('lobby:fill', { pin, count }); notify('Added demo racers'); return true; }
+  try {
+    if (isPaid()) throw new Error('Bots cannot enter paid on-chain races.');
+    await ack('lobby:fill', { pin, count });
+    notify('Added free preview racers');
+    return true;
+  }
   catch (error) { notify(error.message); return false; }
 };
 ui.start = async pin => {
@@ -118,13 +148,21 @@ ui.start = async pin => {
     if (room?.course !== 'v27') {
       throw new Error('The sandbox backend is still running the legacy track. Start is blocked until RACE_COURSE=v27 is deployed.');
     }
+    if (isPaid()) {
+      validateOnchainRoom(room);
+      notify('Closing on-chain registration using the authorized settler. Confirming final entrants…');
+    }
     await ack('lobby:start', { pin }, 145000);
-    notify('Server accepted start · synchronized ten-second countdown');
+    notify(isPaid() ? 'On-chain entries locked and confirmed · synchronized ten-second countdown' :
+      'Server accepted start · synchronized ten-second countdown');
     return true;
   } catch (error) { notify(error.message); return false; }
 };
 ui.reset = async pin => {
-  try { await ack('lobby:reset', { pin }); return true; }
+  try {
+    if (isPaid()) throw new Error('Paid races cannot be reset. Use on-chain cancellation/refunds.');
+    await ack('lobby:reset', { pin }); return true;
+  }
   catch (error) { notify(error.message); return false; }
 };
 ui.connectWallet = connectWallet;
@@ -169,13 +207,138 @@ instantStart.onclick = async () => {
   }
   const pin = ui.getOperatorPin();
   if (!pin) { document.getElementById('devAccess').click(); return; }
-  if (await ui.reset(pin)) notify('Preview lobby reset · ready for a clean test');
+  if (await ui.reset(pin)) notify('Free preview lobby reset · ready for a clean test');
 };
 document.getElementById('registrationTimer').style.display = 'none';
 const devTitle = document.querySelector('#devModalTitle');
 if (devTitle) devTitle.textContent = 'Sandbox Operator PIN';
 const devHint = document.querySelector('#devModal p');
 if (devHint) devHint.textContent = 'This PIN is validated by the shared race server when starting a preview race.';
+// The following controls are kept inside V27's existing operator panel.
+// The browser may create/cancel a race only through a MetaMask transaction.
+// Winner payouts are NEVER initiated from these buttons.
+const controls = document.querySelector('.devbuttons');
+const createRaceButton = document.createElement('button');
+createRaceButton.type = 'button';
+createRaceButton.id = 'createPaidRace';
+createRaceButton.textContent = '＋ CREATE ON-CHAIN RACE';
+createRaceButton.onclick = async () => {
+  try {
+    if (!wallet) await connectWallet();
+    await paid.createRace();
+  } catch (error) { notify(error.message || 'Could not create contract race'); }
+};
+controls.append(createRaceButton);
+
+const cancelRaceButton = document.createElement('button');
+cancelRaceButton.type = 'button';
+cancelRaceButton.id = 'cancelPaidRace';
+cancelRaceButton.textContent = 'CANCEL & ENABLE REFUNDS';
+cancelRaceButton.onclick = async () => {
+  if (!window.confirm('Cancel this on-chain race? Entrants must claim their own refunds.')) return;
+  try {
+    if (!wallet) await connectWallet();
+    await paid.cancelRace();
+  } catch (error) { notify(error.message || 'Could not cancel contract race'); }
+};
+controls.append(cancelRaceButton);
+
+const pendingButton = document.createElement('button');
+pendingButton.type = 'button';
+pendingButton.id = 'checkPendingPaidEntry';
+pendingButton.className = 'btn yellow';
+pendingButton.style.cssText = 'display:none;margin:4px auto;max-width:320px;font-size:12px;';
+pendingButton.textContent = 'CHECK PENDING ON-CHAIN PAYMENT';
+pendingButton.onclick = async () => {
+  try { await paid.checkPayment(); }
+  catch (error) { notify(error.message || 'Could not confirm existing payment'); }
+};
+document.querySelector('.bowl-wrap').append(pendingButton);
+
+const refundButton = document.createElement('button');
+refundButton.type = 'button';
+refundButton.id = 'claimPaidRefund';
+refundButton.style.cssText = 'display:none;position:fixed;right:14px;bottom:14px;z-index:330;padding:6px 10px;border-radius:10px;';
+refundButton.textContent = 'Claim canceled-race refund';
+refundButton.onclick = async () => {
+  const raceId = window.prompt('Numeric ID of the canceled Monad Testnet race to refund:');
+  if (raceId === null) return;
+  try {
+    if (!wallet) await connectWallet();
+    await paid.claimRefund(raceId.trim());
+  } catch (error) { notify(error.message || 'Refund claim failed'); }
+};
+document.body.append(refundButton);
+
+const settlementPanel = document.createElement('div');
+settlementPanel.id = 'onchainSettlementStatus';
+settlementPanel.style.cssText = 'display:none;position:fixed;bottom:44px;right:12px;z-index:325;background:#252054ee;color:white;border:1px solid #a399ef;border-radius:12px;padding:10px 14px;max-width:340px;font:700 12px Nunito,sans-serif;';
+document.body.append(settlementPanel);
+function renderLiveControls() {
+  if (!room) return;
+  const paying = isPaid();
+  document.getElementById('addOne').style.display = paying ? 'none' : '';
+  document.getElementById('addTen').style.display = paying ? 'none' : '';
+  instantStart.style.display = paying ? 'none' : '';
+  createRaceButton.style.display = paying && room.blockchain?.status === 'waiting' ? '' : 'none';
+  cancelRaceButton.style.display = paying && ['open', 'closed', 'interrupted'].includes(room.blockchain?.status) ? '' : 'none';
+  const payment = paid.pending;
+  pendingButton.style.display = paying && payment ? '' : 'none';
+  pendingButton.disabled = paid.busy;
+  refundButton.style.display = paying ? '' : 'none';
+  const paidFee = formatWei(room.blockchain?.entryFeeWei);
+  const feeLabel = paidFee === '?' ? 'TESTNET MON' : paidFee + ' TESTNET MON';
+  const joined = hasEntry();
+  const joinButton = document.getElementById('join');
+  joinButton.textContent = joined ? '✓ VERIFIED ON-CHAIN ENTRY' :
+    paying && paid.matchesPending() ? 'PAYMENT PENDING · CHECK STATUS' :
+    paying ? '✦ PAY ' + feeLabel + ' & JOIN ✦' : '✦ CONNECT & JOIN PREVIEW ✦';
+  joinButton.disabled = !socket.connected || !room ||
+    room.phase !== 'lobby' || joined ||
+    (paying && !ui.joinReady()) || paid.busy ||
+    (room.entries.length >= room.maxPlayers);
+  document.getElementById('walletTitle').textContent = paying ? 'CONNECT METAMASK · MONAD TESTNET' :
+    'CONNECT METAMASK · FREE PREVIEW';
+  document.querySelector('.wallet-disclaimer').textContent = paying ?
+    'CONFIRM AN ON-CHAIN PAYMENT IN METAMASK. TESTNET MON GOES TO THE V2 CONTRACT, NEVER TO THIS SERVER.' :
+    'FREE SANDBOX · META MASK CONNECTION ONLY · NO ENTRY PAYMENT';
+  document.querySelector('.mock-note').textContent = paying ? 'MONAD TESTNET' : 'FREE SANDBOX';
+  document.querySelector('.footer').textContent = paying ?
+    'MONAD TESTNET · V27 AUTHORITATIVE TRACK · V2 VERIFIED ENTRY & AUTOMATIC FIRST-PLACE PAYOUT' :
+    'V27 SANDBOX · FREE ENTRIES · NO ON-CHAIN PAYOUTS';
+  settlementPanel.style.display = paying ? '' : 'none';
+  if (paying) {
+    settlementPanel.replaceChildren();
+    const line = document.createElement('div');
+    const status = room.payout;
+    const chain = room.blockchain;
+    const phase = status?.status || 'waiting';
+    line.textContent = 'TESTNET · ' + (chain?.status || room.phase).toUpperCase() +
+      ' · POOL ' + ui.poolDisplay() + ' MON' +
+      (status?.enabled ? ' · PAYOUT ' + phase.toUpperCase() : '');
+    settlementPanel.append(line);
+    const latestTx = testnetExplorerTx(status?.txHash || payment?.txHash);
+    if (latestTx) {
+      const a = document.createElement('a');
+      a.href = latestTx;
+      a.target = '_blank'; a.rel = 'noopener noreferrer';
+      a.style.color = '#ead393';
+      a.textContent = status?.txHash ? 'VIEW WINNER PAYOUT TRANSACTION' : 'VIEW PENDING ENTRY TRANSACTION';
+      settlementPanel.append(a);
+    }
+    if (status?.error) {
+      const warning = document.createElement('div');
+      warning.textContent = 'Settlement issue: ' + status.error;
+      settlementPanel.append(warning);
+    }
+    if (chain?.status === 'error') {
+      const warning = document.createElement('div');
+      warning.textContent = 'Chain synchronization unavailable. Payments/start locked.';
+      settlementPanel.append(warning);
+    }
+  }
+}
+
 const connectTop = document.getElementById('connectWallet');
 if (connectTop) connectTop.onclick = () => document.getElementById('walletModal').classList.add('open');
 
@@ -186,16 +349,21 @@ socket.on('lobby:state', next => {
   const prev = room;
   room = next;
   ui.setConnected(true);
+  paid.refreshFromRoom(room);
   ui.applyRoom(room, wallet);
+  renderLiveControls();
   if (next.course !== 'v27') {
     status.textContent = 'V27 SANDBOX · Backend course mismatch — start disabled';
     document.getElementById('start').disabled = true;
     return;
   }
   if (next.phase === 'countdown') status.textContent = 'V27 SANDBOX · Synchronized countdown';
-  else if (next.phase === 'racing') status.textContent = 'V27 SANDBOX · Live shared round · V27 visual simulation';
-  else if (next.phase === 'finished') status.textContent = 'V27 SANDBOX · Official winner declared · no payouts';
-  else status.textContent = 'V27 SANDBOX · ' + next.entries.length + '/' + next.maxPlayers + ' racers ready';
+  else if (next.phase === 'racing') status.textContent = (isPaid() ? 'MONAD TESTNET' : 'FREE SANDBOX') + ' · Shared V27 authoritative race';
+  else if (next.phase === 'finished') {
+    status.textContent = isPaid() ? 'MONAD TESTNET · Race finished · payout ' + (next.payout?.status || 'processing') :
+      'V27 SANDBOX · Official winner declared · no payouts';
+  } else status.textContent = (isPaid() ? 'MONAD TESTNET' : 'FREE SANDBOX') +
+    ' · ' + next.entries.length + '/' + next.maxPlayers + ' racers ready';
   if (prev && prev.sessionId !== next.sessionId) notify('Race server restarted · state refreshed');
 });
 socket.on('race:snapshot', frame => {
