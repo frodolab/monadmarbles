@@ -9,14 +9,32 @@ export const DESIGNS = [
   { label: "Mint", color: "#70e6bb" },
 ] as const;
 
-export type Phase = "lobby" | "countdown" | "racing" | "finished";
+export type Phase = "waiting" | "interrupted" | "lobby" | "countdown" | "racing" | "finished";
 
 export interface Entry {
   id: string;
   nickname: string;
   design: number;
   joinedAt: number;
-  source: "demo";
+  source: "demo" | "chain";
+  wallet?: string;
+  entryId?: string;
+  txHash?: string;
+  eventKey?: string;
+}
+
+export interface ChainStatus {
+  mode: "onchain";
+  status: "loading" | "open" | "closed" | "interrupted" | "blocked" | "waiting" | "error";
+  chainRaceId: string | null;
+  entryFeeWei: string | null;
+  poolWei: string | null;
+  entryCount: number;
+  capacity: number;
+  registered?: number;
+  synced: boolean;
+  canStart: boolean;
+  message: string;
 }
 
 export interface RoomState {
@@ -29,6 +47,8 @@ export interface RoomState {
   maxPlayers: number;
   demoEntryFee: number;
   demoOnly: boolean;
+  chainRaceId?: string | null;
+  blockchain?: ChainStatus | null;
   authoritativePhysics?: boolean;
   winnerId?: string | null;
   finishOrder?: string[];

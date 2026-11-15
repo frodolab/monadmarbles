@@ -3,8 +3,8 @@ import { io, type Socket } from "socket.io-client";
 import { DESIGNS, newLocalRoom, type Entry, type Result, type RoomState, type RaceFrame } from "../game";
 
 type Mode = "connecting" | "shared" | "local";
-type Action = "lobby:join" | "lobby:fill" | "lobby:start" | "lobby:reset";
-type Payload = { nickname?: string; design?: number; count?: number; pin?: string };
+type Action = "lobby:join" | "lobby:fill" | "lobby:start" | "lobby:reset" | "lobby:verify";
+type Payload = { nickname?: string; design?: number; count?: number; pin?: string; raceId?: string; txHash?: string; signature?: string };
 
 const configuredUrl = (import.meta.env.VITE_RACE_SERVER_URL as string | undefined)?.trim();
 const serverUrl = configuredUrl || (import.meta.env.DEV ? "http://localhost:3001" : "");
@@ -153,6 +153,8 @@ export function useLobby() {
     mode,
     hasServerUrl: Boolean(serverUrl),
     join: (nickname: string, design: number) => action("lobby:join", { nickname, design }),
+    verify: (payload: { raceId: string; txHash: string; nickname: string; signature: string }) =>
+      action("lobby:verify", payload),
     fill: (pin: string, count = 8) => action("lobby:fill", { pin, count }),
     start: (pin: string) => action("lobby:start", { pin }),
     reset: (pin: string) => action("lobby:reset", { pin }),
