@@ -76,6 +76,7 @@ contract MonadMarbles {
     error PayoutFailed();
     error ReentrantCall();
     error DirectPaymentDisabled();
+    error WrongChain();
 
     event OwnershipTransferStarted(address indexed currentOwner, address indexed proposedOwner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -117,6 +118,8 @@ contract MonadMarbles {
     }
 
     constructor() {
+        // Refuse accidental mainnet deployments. 31337 is the local Anvil / Foundry chain.
+        if (block.chainid != 10143 && block.chainid != 31337) revert WrongChain();
         owner = msg.sender;
         settler = msg.sender;
         emit OwnershipTransferred(address(0), msg.sender);

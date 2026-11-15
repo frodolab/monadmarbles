@@ -8,6 +8,7 @@ interface Vm {
     function prank(address sender) external;
     function deal(address who, uint256 newBalance) external;
     function warp(uint256 newTimestamp) external;
+    function chainId(uint256 newChainId) external;
     function expectRevert(bytes4 errorSelector) external;
 }
 
@@ -67,6 +68,13 @@ contract MonadMarblesTest {
     function _twoEntrants() internal returns (uint256 aliceId, uint256 bobId) {
         aliceId = _join(ALICE, 0);
         bobId = _join(BOB, 13);
+    }
+
+    function testDeploymentRefusesMainnetChainId() public {
+        vm.chainId(143); // Monad mainnet: explicitly not allowed for this prototype.
+        vm.expectRevert(MonadMarbles.WrongChain.selector);
+        new MonadMarbles();
+        vm.chainId(31337); // Local Foundry / Anvil tests may deploy.
     }
 
     function testNewRaceIsOpenAndConfigurable() public view {

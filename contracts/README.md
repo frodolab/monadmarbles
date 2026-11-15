@@ -8,6 +8,9 @@ until the contract integration is ready.
 
 **DO NOT deploy to mainnet or use for real-value betting. This is unaudited code.**
 
+The constructor explicitly rejects chains other than Monad Testnet (10143) and
+local Foundry / Anvil (31337), reducing the risk of accidental mainnet deployment.
+
 ## How it fits the existing multiplayer architecture
 
 The existing Railway race server remains the authoritative source of 3D physics.
