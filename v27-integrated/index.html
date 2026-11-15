@@ -676,10 +676,21 @@ let devToken=null;
 const stage=document.querySelector('.stage');
 async function requestDev(path,payload,token=devToken){
  try{
-  if(window.MonadMarblesPreviewBridge?.connected){
-    if(path==='unlock') return {ok:true,token:String(payload.pin||'')};
-    if(path==='logout') return {ok:true};
-    if(path==='action') return {ok:true};
+  // In the deployed sandbox, the SAME race server validates the PIN.
+  // Do not silently unlock for arbitrary strings or fall back to the local API.
+  const preview=window.MonadMarblesPreviewBridge;
+  if(preview){
+    if(!preview.connected)throw new Error('Race server is offline. Cannot unlock developer controls.');
+    if(path==='unlock'){
+      const pin=String(payload.pin||'');
+      if(!pin)throw new Error('Enter the operator PIN.');
+      await preview.verifyOperatorPin(pin);
+      // Retained only in page memory, never embedded in a public build.
+      return {ok:true,token:pin};
+    }
+    if(path==='logout')return {ok:true};
+    if(path==='action')return {ok:true};
+    throw new Error('Unsupported operator command');
   }
   const response=await fetch('/api/dev/'+path,{method:'POST',credentials:'omit',
    headers:{'Content-Type':'application/json',...(token?{'Authorization':'Bearer '+token}:{})},
@@ -1085,17 +1096,31 @@ window.MonadMarblesPreviewBridge={
    if(syncedRaceKey)resetPreview();
    syncedRaceKey=key;this.pendingResult=null;
   }
-  const incoming=next.entries||[];
-  if(!finished&&next.phase!=='racing'&&next.phase!=='finished'){
-   for(const entry of incoming){
-    let p=entrants.find(x=>x.serverId===entry.id);
-    if(!p){
-      p=add(entry.nickname||'Racer',Number(entry.design||0)%colors.length);
-      if(!p)break;
-      p.serverId=entry.id;p.wallet=entry.wallet||null;
-    }else{p.name=entry.nickname||p.name;}
-   }
+  // Treat the server roster as EXACTLY authoritative: no stale local
+  // entries and no unverified "mock wallet" entries survive synchronization.
+  const incoming=Array.isArray(next.entries)?next.entries:[];
+  const accepted=new Map(incoming.map(entry=>[entry.id,entry]));
+  if(entrants.some(p=>!accepted.has(p.serverId))){
+   entrants=entrants.filter(p=>accepted.has(p.serverId));
+   const remaining=new Set(entrants);
+   particles=particles.filter(item=>remaining.has(item.p));
+   if(myMarble&&!remaining.has(myMarble))myMarble=null;
   }
+  // Late spectators must be able to reconstruct the roster after the timer
+  // has closed. Temporarily bypass V27's local-only "finished" add guard.
+  const wasFinished=finished;
+  finished=false;
+  for(const entry of incoming){
+   let p=entrants.find(item=>item.serverId===entry.id);
+   if(!p){
+    p=add(entry.nickname||'Racer',Math.abs(Number(entry.design)||0)%colors.length);
+    if(!p)break;
+    p.serverId=entry.id;
+   }
+   p.name=entry.nickname||'Racer';
+   p.wallet=entry.wallet||null;
+  }
+  finished=wasFinished;
   if(wallet){
    mockAddress=wallet;
    myMarble=entrants.find(x=>x.wallet?.toLowerCase()===wallet.toLowerCase() || x.name.toLowerCase()===(wallet.slice(0,6)+'…'+wallet.slice(-4)).toLowerCase())||null;
