@@ -9,7 +9,7 @@ export const DESIGNS = [
   { label: "Mint", color: "#70e6bb" },
 ] as const;
 
-export type Phase = "lobby" | "countdown" | "racing";
+export type Phase = "lobby" | "countdown" | "racing" | "finished";
 
 export interface Entry {
   id: string;
@@ -27,7 +27,30 @@ export interface RoomState {
   maxPlayers: number;
   demoEntryFee: number;
   demoOnly: boolean;
+  authoritativePhysics?: boolean;
+  winnerId?: string | null;
+  finishOrder?: string[];
   serverTime?: number;
+}
+
+export interface MarbleFrame {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  qx: number;
+  qy: number;
+  qz: number;
+  qw: number;
+  progress: number;
+}
+
+export interface RaceFrame {
+  roundId: number;
+  tick: number;
+  elapsed: number;
+  winnerId: string | null;
+  marbles: MarbleFrame[];
 }
 
 export interface Result {
@@ -44,5 +67,8 @@ export function newLocalRoom(roundId = 1): RoomState {
     maxPlayers: 48,
     demoEntryFee: 0.1,
     demoOnly: true,
+    authoritativePhysics: false,
+    winnerId: null,
+    finishOrder: [],
   };
 }
