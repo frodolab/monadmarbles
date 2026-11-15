@@ -44,10 +44,21 @@ async function run() {
     assert.equal(initialStates[0].sessionId, initialStates[1].sessionId);
     assert.equal(initialStates[0].raceId, initialStates[1].raceId);
 
+    // V27 operator modal must reject an arbitrary PIN before unlocking.
+    const denied = await clients[0].timeout(3000).emitWithAck("operator:verify", { pin: "wrong" });
+    assert.equal(denied.ok, false);
+    const verified = await clients[0].timeout(3000).emitWithAck("operator:verify", { pin: "ci-only" });
+    assert.equal(verified.ok, true);
+
     for (let i = 0; i < 2; i++) {
       const response = await clients[i].timeout(3000).emitWithAck("lobby:join", { nickname: "spectator-" + i, design: i });
       assert.equal(response.ok, true);
     }
+    // Two tabs must not create duplicate preview marbles for one wallet label.
+    const duplicate = await clients[0].timeout(3000).emitWithAck("lobby:join", { nickname: "spectator-1", design: 1 });
+    assert.equal(duplicate.ok, false);
+    assert.match(duplicate.error, /already entered/);
+
     const fill = await clients[0].timeout(3000).emitWithAck("lobby:fill", { pin: "ci-only", count: 8 });
     assert.equal(fill.ok, true);
 
