@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatEther } from "viem";
-import type { RoomState } from "../game";
+import type { Result, RoomState } from "../game";
 import {
   closeRaceEntries, createTestnetRace, submitRaceEntry,
   waitForTestnetTransaction, testnetExplorerTx, cancelTestnetRace, claimTestnetRefund,
