@@ -108,6 +108,27 @@ async function main() {
   assert.equal(admission.canStart, false);
   console.log("PASS no active contract race means no automatic start");
 
+  // For a fresh empty race, use a confirmed storage snapshot and only
+  // query events mined afterward; never skip a concurrently mined entry.
+  const empty = mockVerifier();
+  empty.state.count = 0;
+  empty.state.head = 200n;
+  empty.state.events = [];
+  const emptyAdmission = new ChainAdmission({ verifier: empty.verifier });
+  await emptyAdmission.refresh();
+  assert.equal(emptyAdmission.snapshot.chainRaceId, "1");
+  assert.equal(emptyAdmission.snapshot.status, "open");
+  assert.equal(emptyAdmission.snapshot.synced, true);
+  assert.equal(empty.calls.length, 0, "No historical scan is needed for a race with zero entries");
+  empty.state.head = 206n;
+  empty.state.count = 1;
+  empty.state.events = [{ ...first, blockNumber: "203" }];
+  await emptyAdmission.refresh();
+  assert.equal(empty.calls.length, 1);
+  assert.equal(empty.calls[0][0], 201n);
+  assert.equal(emptyAdmission.snapshot.registered, 1);
+  console.log("PASS empty race syncs instantly, then safely scans only new confirmed entries");
+
   // Refuse conflicting or duplicate entry identities rather than silently
   // accumulating extra fee-based marbles.
   const duplicate = mockVerifier();

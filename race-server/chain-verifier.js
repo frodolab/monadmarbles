@@ -117,13 +117,16 @@ function createVerifier({
     return { chainId, contractAddress: normalizedAddress, owner };
   }
 
-  async function activeRace() {
+  async function activeRace({ blockNumber } = {}) {
+    // Read both fields from one confirmed block so a zero-entry shortcut
+    // cannot accidentally skip a registration mined between RPC reads.
+    const atBlock = blockNumber === undefined ? {} : { blockNumber: BigInt(blockNumber) };
     const id = await client.readContract({
-      address: normalizedAddress, abi: ABI, functionName: "activeRaceId",
+      address: normalizedAddress, abi: ABI, functionName: "activeRaceId", ...atBlock,
     });
     if (id === 0n) return null;
     const data = await client.readContract({
-      address: normalizedAddress, abi: ABI, functionName: "races", args: [id],
+      address: normalizedAddress, abi: ABI, functionName: "races", args: [id], ...atBlock,
     });
     const [status, entryFee, prizePool, winningEntryId, createdAt, closedAt, maxEntries, entryCount, prizeClaimed] = data;
     return {
@@ -151,10 +154,12 @@ function createVerifier({
   // This operation is designed to run when onboarding/recovering a race.
   // A failed/partial replay MUST keep a paid lobby locked, never grant fewer
   // marbles than on-chain entrants or silently drop entrants during restarts.
-  async function replayEntries(raceId, { chunkSize = 2000n, fromBlock = deploymentBlock, toBlock } = {}) {
+  async function replayEntries(raceId, { chunkSize = 75n, fromBlock = deploymentBlock, toBlock } = {}) {
     const id = validateRaceId(raceId);
     const step = BigInt(chunkSize);
-    if (step < 1n || step > 5000n) fail("Replay chunk size must be 1–5000 blocks.");
+    // Public Monad Testnet providers impose small eth_getLogs ranges.
+    // Hard-cap every request, including caller-specified chunk sizes.
+    if (step < 1n || step > 75n) fail("Replay chunk size must be 1–75 blocks.");
     await assertNetwork();
     const safeHead = await confirmedBlock();
     const stopAt = toBlock === undefined ? safeHead : BigInt(toBlock);

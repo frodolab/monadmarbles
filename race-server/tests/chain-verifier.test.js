@@ -127,6 +127,23 @@ async function main() {
     await assert.rejects(() => v.replayEntries("1", { toBlock: 100n }), /exceeds confirmed/);
   });
 
+  await check("default replay limits every eth_getLogs request to 75 blocks", async () => {
+    const client = mockClient({ head: 335n });
+    const initial = client.getLogs;
+    const ranges = [];
+    client.getLogs = async (args) => {
+      ranges.push([args.fromBlock, args.toBlock]);
+      assert.ok(args.toBlock - args.fromBlock < 75n, "RPC block window exceeded");
+      return initial(args);
+    };
+    const v = createVerifier({ publicClient: client, deployBlock: 91n });
+    const rows = await v.replayEntries("1");
+    assert.equal(rows.length, 1);
+    assert.ok(ranges.length >= 3);
+    assert.equal(ranges[0][0], 91n);
+    await assert.rejects(() => v.replayEntries("1", { chunkSize: 2000n }), /1–75 blocks/);
+  });
+
   await check("disabled mode never opens testnet entry validation", async () => {
     assert.equal(readChainConfig({}), null);
     assert.equal(readChainConfig({

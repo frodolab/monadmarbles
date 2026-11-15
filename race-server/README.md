@@ -181,3 +181,12 @@ an untracked rerun; cancel/refund is the safe next action.
   short wallet label until reauthorized. Marble ownership is durable on-chain
 - No winner settlement/claim automation yet, and centralized race physics
   is not a trustless proof. Use testnet MON only.
+
+## Monad public RPC event-range compatibility
+
+The public testnet RPC rejects oversized `eth_getLogs` queries with `block
+range too large`. Blockchain admission now limits requests to **75 blocks**,
+and reads active-race parameters at one confirmed block. For a newly created
+race with zero entrants, the server starts scanning at the next confirmed
+block; after paid entries exist, the full immutable event history is recovered
+in bounded pages. If any RPC read fails, race start remains locked.

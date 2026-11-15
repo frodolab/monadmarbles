@@ -82,7 +82,11 @@ class ChainAdmission {
   async _refresh() {
     try {
       await this.verifier.assertNetwork();
-      const current = await this.verifier.activeRace();
+      // A single confirmed block anchors the entire registration snapshot.
+      const confirmedHead = await this.verifier.confirmedBlock();
+      const current = await this.verifier.activeRace(
+        confirmedHead === null ? {} : { blockNumber: confirmedHead }
+      );
       if (!current) {
         // The contract returns 0 if no open/closed race exists.
         // Do not pretend a prior lobby still accepts payments.
@@ -111,11 +115,15 @@ class ChainAdmission {
         this.entries.clear();
         this.walletIds.clear();
         this.eventKeys.clear();
-        this.cursor = this.verifier.deploymentBlock;
+        // If contract storage proves there are zero paid entries at the
+        // confirmed snapshot block, no earlier PlayerJoined events can exist
+        // for this race. Start the cursor at the next confirmed block.
+        // This avoids an enormous historical scan for newly created races.
+        this.cursor = current.entryCount === 0 && confirmedHead !== null
+          ? confirmedHead + 1n : this.verifier.deploymentBlock;
         this.sawOpen = current.status === "Open";
       }
 
-      const confirmedHead = await this.verifier.confirmedBlock();
       const draftEntries = new Map(this.entries);
       const draftWallets = new Map(this.walletIds);
       const draftKeys = new Map(this.eventKeys);
