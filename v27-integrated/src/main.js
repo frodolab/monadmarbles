@@ -325,7 +325,7 @@ function showPodium(){
   const racer=finished[place-1];
   return `<div class="podium-label ${place===1?'podium-first':''}"><span>${['🥇','🥈','🥉'][place-1]} ${place===1?'CHAMPION':place===2?'RUNNER UP':'THIRD PLACE'}</span><strong>${racer?escapeHTML(racer.name):'—'}</strong></div>`;
  }).join('');
- $('#winningAmount').textContent=(players.length*ENTRY).toFixed(1)+' MON';
+ $('#winningAmount').textContent=(players.length*ENTRY).toFixed(1)+' DEMO MON';
  $('#finish').style.display='flex';
  document.body.classList.add('show-podium');
 }
@@ -346,9 +346,33 @@ function returnToLobby(){
 }
 $('#reset').onclick=returnToLobby;$('#again').onclick=returnToLobby;
 document.querySelector('.back')?.addEventListener('click',event=>{event.preventDefault();returnToLobby()});
+let pendingOfficial=null;
+function applyOfficialResult(data){
+ if(!handoff?.livePreview)return;
+ pendingOfficial=data;
+ if(phase==='lobby')return;
+ if(phase==='done'&&podiumVisible)return;
+ const byId=new Map(players.map(p=>[p.id,p]));
+ const official=Array.isArray(data.finishOrder)?data.finishOrder:[];
+ const winner=byId.get(data.winnerId)||null;
+ if(!winner){toast('Waiting for official winner data');return;}
+ // First place comes exclusively from the authoritative server.
+ // Remaining places are progress-based placeholders, NOT official finishes.
+ const seen=new Set([winner.id]);
+ const runners=[...official.slice(1).map(id=>byId.get(id)).filter(Boolean),
+  ...players.filter(p=>p.id!==winner.id).sort((a,b)=>b.progress-a.progress)]
+  .filter(p=>{if(seen.has(p.id))return false;seen.add(p.id);return true});
+ finished=[winner,...runners].slice(0,3);
+ finished.forEach((p,i)=>{p.finished=true;p.rank=i+1;});
+ phase='done';document.body.classList.remove('racing');
+ updateUI();
+ if(window.parent!==window)window.parent.postMessage({type:'monadmarbles:race-finished'},location.origin);
+ else showPodium();
+}
 window.addEventListener('message',event=>{
  if(event.origin!==location.origin||event.source!==window.parent)return;
- if(event.data?.type==='monadmarbles:race-start'&&phase==='lobby'){$('#start').click()}
+ if(event.data?.type==='monadmarbles:race-start'&&phase==='lobby'){$('#start').click();if(pendingOfficial)applyOfficialResult(pendingOfficial)}
+ if(event.data?.type==='monadmarbles:official-result'){applyOfficialResult(event.data)}
  if(event.data?.type==='monadmarbles:podium-show'&&phase==='done'&&!podiumVisible){
   // Only reveal podium AFTER the persistent V34 curtain has fully covered us.
   showPodium();
@@ -459,7 +483,7 @@ if(tr.y<8&&tr.z<=-(LENGTH-5)&&!p.finished){p.finished=true;p.rank=finished.lengt
 // Event safeguard: after the time limit, award every remaining marble a finish
 // in progress order so 48-player sessions cannot hang indefinitely.
 if((phase==='race'||phase==='release')&&elapsed>MAX_RACE_SECONDS){for(const p of players.filter(p=>!p.finished).sort((a,b)=>b.progress-a.progress)){p.finished=true;p.rank=finished.length+1;p.finishTime=elapsed;finished.push(p);}toast('Race time limit reached — all remaining racers classified.');}
-if((phase==='race'||phase==='release')&&finished.length===players.length&&players.length){
+if((phase==='race'||phase==='release')&&finished.length===players.length&&players.length&&!handoff?.livePreview){
  phase='done';document.body.classList.remove('racing');updateUI();
  if(window.parent!==window)window.parent.postMessage({type:'monadmarbles:race-finished'},location.origin);
  else showPodium();
