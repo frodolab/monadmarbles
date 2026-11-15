@@ -40,7 +40,7 @@ const hasEntry = () => Boolean(room?.entries?.some(entry =>
 const getMetaMaskProvider = () => {
   const injected = window.ethereum;
   const candidates = Array.isArray(injected?.providers) ? injected.providers : [injected];
-  return candidates.find(candidate => candidate?.isMetaMask) || injected;
+  return candidates.find(candidate => candidate?.isMetaMask) || (injected?.isMetaMask ? injected : null);
 };
 let connectInFlight = null;
 const connectWallet = async () => {
