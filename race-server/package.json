@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "test:v27": "node tests/v27-physics.test.js",
     "test": "node tests/physics.test.js && node tests/sync.test.js && node tests/chain-verifier.test.js && node tests/chain-admission.test.js && node tests/auto-settler.test.js"
   },
   "engines": {
@@ -15,7 +16,8 @@
     "express": "^4.21.2",
     "socket.io": "^4.8.1",
     "@dimforge/rapier3d-compat": "^0.21.0",
-    "viem": "^2.37.0"
+    "viem": "^2.37.0",
+    "three": "^0.169.0"
   },
   "devDependencies": {
     "socket.io-client": "^4.8.1"
