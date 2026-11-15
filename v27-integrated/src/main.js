@@ -323,7 +323,7 @@ function showPodium(){
  const summary=$('#podiumLabels');
  summary.innerHTML=[2,1,3].map(place=>{
   const racer=finished[place-1];
-  return `<div class="podium-label ${place===1?'podium-first':''}"><span>${['🥇','🥈','🥉'][place-1]} ${place===1?'CHAMPION':place===2?'RUNNER UP':'THIRD PLACE'}</span><strong>${racer?escapeHTML(racer.name):'—'}</strong></div>`;
+  return `<div class="podium-label ${place===1?'podium-first':''}"><span>${['🥇','🥈','🥉'][place-1]} ${place===1?'OFFICIAL WINNER':handoff?.livePreview?'VISUAL PREVIEW':place===2?'RUNNER UP':'THIRD PLACE'}</span><strong>${racer?escapeHTML(racer.name):'—'}</strong></div>`;
  }).join('');
  $('#winningAmount').textContent=(players.length*ENTRY).toFixed(1)+' DEMO MON';
  $('#finish').style.display='flex';
