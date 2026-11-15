@@ -572,6 +572,36 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
 .stage.pre-race .bowl-timer{opacity:0}
 @media(prefers-reduced-motion:reduce){.bowl-timer.warning .timer-time::after,.pre-race-countdown .pre-number{animation:none!important}.bowl-timer.warning .timer-time::after{opacity:1}}
 
+
+/* Shared audio controls, responsive lobby, matched preview swirls */
+.mm-audio{position:fixed;right:12px;bottom:12px;z-index:130;display:flex;align-items:center;gap:8px;background:#26205de8;border:2px solid #b69fea;border-radius:999px;padding:6px 10px;box-shadow:0 7px 15px #28185044;backdrop-filter:blur(9px)}
+.mm-audio button{border:0;background:transparent;color:#fff;font-size:19px;min-height:36px;min-width:36px;cursor:pointer}
+.mm-audio label{color:#f3e4ff;font-size:10px;letter-spacing:1px;font-weight:900}
+.mm-audio input{width:94px;accent-color:#ffdc75}
+.choice .ball{background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;box-shadow:inset 0 0 3px #ffffffaa,inset -6px -6px 10px #18134666,1px 4px 2px #11153370}
+@media(max-width:900px){.stage{min-height:100svh;padding:clamp(10px,2vw,20px)}.shell{min-height:calc(100svh - 20px)}.selector{max-width:100%}.gold-pool{max-width:92vw!important}}
+@media(max-width:600px){
+ .stage{height:auto!important;min-height:100svh;padding:10px 10px 60px!important;overflow-x:hidden}
+ .shell{min-height:calc(100svh - 70px);gap:8px}
+ .hero h1{font-size:clamp(29px,8vw,52px)!important;letter-spacing:-.04em}
+ .bowl-wrap{width:100%;min-width:0}
+ #bowl{width:100%;max-height:min(42svh,360px)!important;object-fit:contain}
+ .gold-pool{max-width:92vw!important;min-height:60px!important;padding:6px 10px!important}
+ .gold-number{font-size:clamp(36px,9vw,58px)!important}
+ .gold-number em{font-size:clamp(18px,5vw,26px)!important}
+ .pool-monad{width:44px!important;height:44px!important}
+ .gold-sub{font-size:clamp(12px,3.7vw,18px)!important}
+ .selector{flex-wrap:wrap;gap:8px!important;padding:10px!important;margin-bottom:44px}
+ .sel-choices{order:3;flex-basis:100%;gap:6px!important}
+ .choice{flex-basis:62px!important}
+ .join{flex:1 1 145px!important;min-width:0!important}
+ .main-join{max-width:96%!important}
+ .mm-audio{bottom:7px;right:7px;padding:4px 6px;gap:2px}
+ .mm-audio label{display:none}
+ .mm-audio input{width:82px}
+ .toast{max-width:calc(100vw - 18px)!important}
+}
+@media(max-height:620px) and (min-width:650px){.hero h1{font-size:clamp(30px,6vh,60px)!important}#bowl{max-height:36vh!important}.gold-pool{min-height:55px!important}}
 </style>
 </head>
 <body>
@@ -625,7 +655,7 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
     <div class="gold-pool" id="goldPool" aria-label="Mock grand prize">
       <span class="pool-monad" aria-hidden="true"><span class="pool-monad-inner"></span></span>
       <div class="pool-stack"><div class="gold-sub">PRIZE POOL</div><div class="gold-number"><span id="pool">0.0</span><em>MON</em></div></div>
-      <span class="mock-note">DEMO</span>
+      
     </div>
     <div class="bowl-canvas-area">
       <div id="walletConnected" class="wallet-connected-pill" role="status"></div>
@@ -643,7 +673,7 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
 </section>
 
 <div class="hidden-integration" aria-hidden="true"><div id="pop"></div><div id="feed"></div></div>
-<div class="footer">MONAD MARBLES · CANDY CIRCUIT · LOCAL FRONTEND CONCEPT · NOT CONNECTED TO BLOCKCHAIN</div></div></div><div class="toast" id="toast"></div>
+<div class="footer">MONAD MARBLES · PREVIEW BUILD · NO DEPOSITS OR PAYOUTS</div></div></div><div id="mmAudio" class="mm-audio" role="group" aria-label="Game audio controls"><button id="mmMute" type="button" aria-label="Toggle mute" title="Mute game audio">🔇</button><label for="mmVolume">VOLUME</label><input id="mmVolume" type="range" min="0" max="100" step="1" value="24" aria-label="Game volume"></div><div class="toast" id="toast"></div>
 <button type="button" id="devAccess" class="dev-access" aria-haspopup="dialog">🔒 Dev Access</button><span class="dev-mode-indicator" id="devIndicator">⚙ DEV MODE</span>
 <div class="dev-modal-overlay" id="devModal" aria-hidden="true"><div class="dev-modal" role="dialog" aria-modal="true" aria-labelledby="devModalTitle"><h2 id="devModalTitle">Developer Access</h2><p>Enter the developer password to unlock testing tools for this page only.</p><form id="devForm"><label for="devPin">PIN</label><input id="devPin" type="password" required autocomplete="off" placeholder="Developer password" aria-describedby="devError"><div class="dev-error" id="devError" role="status"></div><div class="dev-modal-actions"><button type="button" id="devCancel" class="btn purple">CANCEL</button><button type="submit" id="devUnlock" class="btn yellow">UNLOCK</button></div></form></div></div>
 <div id="walletModal" class="modal-overlay" aria-hidden="true"><div class="wallet-modal" role="dialog" aria-modal="true" aria-labelledby="walletTitle"><button class="modal-close" id="closeWallet" aria-label="Close">×</button><div class="wallet-stars">✦ ✧ ✦</div><h2 id="walletTitle">CONNECT WALLET</h2><p>Choose a wallet to preview joining the race</p><div class="wallet-options"><button class="wallet-option" data-wallet="MetaMask"><span class="wallet-logo metamask-logo"><svg viewBox="0 0 48 48" width="39" height="39" aria-hidden="true"><polygon points="4,5 19,15 16,25 9,25" fill="#e2761b"/><polygon points="44,5 29,15 32,25 39,25" fill="#e2761b"/><polygon points="4,5 17,5 24,11 31,5 44,5 29,17 24,20 19,17" fill="#f6851b"/><polygon points="9,25 17,23 20,32 12,36" fill="#e4761b"/><polygon points="39,25 31,23 28,32 36,36" fill="#e4761b"/><polygon points="17,23 24,20 31,23 29,32 24,35 19,32" fill="#f6851b"/><polygon points="12,36 19,32 24,35 29,32 36,36 31,41 24,38 17,41" fill="#cd6116"/><polygon points="18,30 22,31 20,33" fill="#763d16"/><polygon points="30,30 26,31 28,33" fill="#763d16"/><polygon points="21,35 27,35 24,38" fill="#e4761b"/></svg></span><span>MetaMask</span><span class="wallet-chevron">›</span></button><button class="wallet-option" data-wallet="Coinbase Wallet"><span class="wallet-logo coinbase-logo"><svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><circle cx="24" cy="24" r="24" fill="#0052ff"/><path fill="white" fill-rule="evenodd" d="M24 11a13 13 0 1 0 0 26 13 13 0 0 0 0-26Zm-7 9h14v8H17z"/></svg></span><span>Coinbase Wallet</span><span class="wallet-chevron">›</span></button><button class="wallet-option" data-wallet="Phantom"><span class="wallet-logo phantom-logo"><svg viewBox="0 0 48 48" width="42" height="42" role="img" aria-label="Phantom wallet logo"><rect width="48" height="48" rx="14" fill="#AB9FF2"/><path d="M13 32.1c-.3-1.1-.5-2.4-.5-3.7 0-9.1 6.2-16.1 14.2-16.1 7.8 0 13.2 6.4 13.2 14 0 3.4-1.8 5.4-4.2 5.4-1.9 0-3-1.2-3.9-2.9-1.2 2.4-3 4-5.6 4-2.5 0-3.8-1.2-4.8-3.1-1.5 2.7-3.7 4.7-7 4.7-2.4 0-4.4-1.2-5.4-2.1Z" fill="#fff"/><circle cx="25.7" cy="22.3" r="1.8" fill="#6556A8"/><circle cx="33.2" cy="22.3" r="1.8" fill="#6556A8"/><path d="M16 30.8c-2.3 0-4.4 1.1-5.6 3.6" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></span><span>Phantom</span><span class="wallet-chevron">›</span></button></div><div class="wallet-disclaimer">DEMO ONLY · NO WALLET CONNECTION OR PAYMENT</div></div></div>
@@ -670,6 +700,31 @@ themeMenu.querySelectorAll('[data-theme]').forEach(button=>{button.addEventListe
 })});
 document.addEventListener('pointerdown',e=>{if(!themePicker.contains(e.target))setThemeMenu(false)});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!themeMenu.hidden){setThemeMenu(false);themeTrigger.focus()}});
+
+
+(function(){
+ const mute=document.getElementById('mmMute'),range=document.getElementById('mmVolume');
+ let context=null,gain=null,loop=null,beat=0,lastBounce=0;
+ let level=Number(localStorage.getItem('mm-audio-volume')??24);
+ if(!Number.isFinite(level)||level<0||level>100)level=24;
+ let muted=localStorage.getItem('mm-audio-muted')!=='false';range.value=String(level);
+ function update(){mute.textContent=muted||level===0?'🔇':'🔊';mute.setAttribute('aria-label',muted?'Unmute sound':'Mute sound');if(gain)gain.gain.setTargetAtTime(muted?0:level/100*.3,context.currentTime,.05)}
+ function ensure(){if(!context){const C=window.AudioContext||window.webkitAudioContext;if(!C)return false;context=new C;gain=context.createGain();gain.gain.value=0;gain.connect(context.destination);update()}if(context.state==='suspended')context.resume().catch(()=>{});if(!loop)loop=setInterval(music,390);return true}
+ function note(hz,duration=.20,volume=.12,kind='sine',delay=0){if(!context||muted||!level)return;const t=context.currentTime+delay,osc=context.createOscillator(),env=context.createGain();osc.type=kind;osc.frequency.value=hz;env.gain.setValueAtTime(.0001,t);env.gain.exponentialRampToValueAtTime(Math.max(.001,volume),t+.02);env.gain.exponentialRampToValueAtTime(.0001,t+duration);osc.connect(env);env.connect(gain);osc.start(t);osc.stop(t+duration+.02)}
+ const melody=[392,0,523.25,0,440,0,587.33,0,349.23,0,440,0,329.63,0,392,0];
+ function music(){if(document.hidden||muted||!level)return;const hz=melody[beat%melody.length];if(hz)note(hz,.34,.045);if(beat%8===0)note(196,.72,.045);beat++}
+ function sfx(type){if(!ensure())return;if(type==='bounce'){if(performance.now()-lastBounce<190)return;lastBounce=performance.now();note(180+Math.random()*190,.12,.06);return}
+ if(type==='join'){note(523,.16,.15,'triangle');note(784,.20,.15,'sine',.08)}
+ else if(type==='tick')note(725,.12,.10,'triangle');
+ else if(type==='transition'){note(330,.5,.10,'sawtooth');note(659,.6,.12,'triangle',.15)}
+ else if(type==='start'){[392,523,659,784].forEach((n,i)=>note(n,.40,.11,'triangle',i*.07))}
+ else if(type==='win'){[523,659,784,1046].forEach((n,i)=>note(n,.6,.13,'triangle',i*.15))}
+ else if(type==='ui')note(660,.10,.08)}
+ mute.addEventListener('click',()=>{muted=!muted;localStorage.setItem('mm-audio-muted',String(muted));ensure();update();if(!muted)sfx('ui')});
+ range.addEventListener('input',()=>{level=Number(range.value);if(level&&!(!muted))muted=false;localStorage.setItem('mm-audio-volume',String(level));localStorage.setItem('mm-audio-muted',String(muted));ensure();update()});
+ document.addEventListener('pointerdown',()=>{if(!muted)ensure()},{once:true});document.addEventListener('keydown',()=>{if(!muted)ensure()},{once:true});
+ window.MonadMarblesAudio={sfx,ensure};update();
+})();
 
 const colors=[['Bubblegum','#ff5ba4'],['Tangerine','#ff914e'],['Lemon Drop','#ffdc55'],['Mint Chip','#5ae6c0'],['Blueberry','#6092ff'],['Grape Soda','#a582f5'],['Cherry Pop','#ef5d6d'],['Lime Rush','#a7e66e'],['Peachy','#ffb7a0'],['Cotton Candy','#e798ec'],['Sky Splash','#76dbf4'],['Midnight','#3c467b'],['Galaxy','#906cf1'],['Golden','#e7af40']];
 const $=id=>document.getElementById(id), choiceRow=$('choices');let lastPoolValue=null;let selected=0,remaining=90,running=false,finished=false,entrants=[],idCounter=0,lastTs=0,particles=[],timerHandle=0,toastHandle=0,connectedWallet=null,myMarble=null,mockAddress=null;
@@ -708,11 +763,27 @@ $('devForm').addEventListener('submit',e=>{
   $('devError').textContent='Incorrect password';$('devPin').select();
  }
 });
-function ballCss(c){return `--ball:${c};`}colors.forEach(([name,c],i)=>{const b=document.createElement('button');b.type='button';b.className='choice'+(i===0?' active':'');b.title='Select '+name;b.innerHTML=`<div class="ball" style="${ballCss(c)}"></div><span>${name}</span>`;b.onclick=()=>{if(finished||preRaceActive)return;selected=i;[...choiceRow.children].forEach((x,j)=>x.classList.toggle('active',j===selected));if(myMarble&&!finished){myMarble.index=i;myMarble.color=colors[i][1];syncPlayerPreview();update();toast('Your marble updated for all spectators (local demo)')}b.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'})};choiceRow.appendChild(b)});
+
+function makeMatchingMarblePreview(color,index){
+ const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;
+ const g=canvas.getContext('2d'),w=512,h=256,base=color.replace('#','');
+ const shade='#'+[0,2,4].map(i=>Math.round(parseInt(base.slice(i,i+2),16)*.66).toString(16).padStart(2,'0')).join('');
+ const glaze=g.createLinearGradient(0,0,0,h);glaze.addColorStop(0,shade);glaze.addColorStop(.22,color);glaze.addColorStop(.68,color);glaze.addColorStop(1,shade);
+ g.fillStyle=glaze;g.fillRect(0,0,w,h);g.lineCap='round';g.lineJoin='round';
+ const styles=['#fff8e9','#fff5d8','#ecfaff'];
+ for(let band=0;band<3;band++){const offset=(index*21+band*143)%w;
+  for(const wrap of [-w,0,w]){g.beginPath();for(let t=0;t<=30;t++){const y=t*h/30,x=wrap+offset+62*Math.sin(y/h*Math.PI*2+band*1.65+index*.15);if(!t)g.moveTo(x,y);else g.lineTo(x,y)}g.strokeStyle='rgba(30,30,68,.28)';g.lineWidth=28;g.stroke();g.strokeStyle=styles[(index+band)%styles.length];g.lineWidth=17;g.stroke()}
+ }
+ for(let dot=0;dot<8;dot++){const x=(index*47+dot*113+54)%w,y=30+((dot*79+index*13)%192);g.beginPath();g.arc(x,y,dot%3===0?10:5.5,0,Math.PI*2);g.fillStyle=dot%2===0?'rgba(255,255,255,.95)':'rgba(24,37,81,.48)';g.fill()}
+ return canvas.toDataURL('image/png');
+}
+const matchingMarbleImages=colors.map(([name,color],i)=>makeMatchingMarblePreview(color,i));
+
+function ballCss(c){return `--ball:${c};`}colors.forEach(([name,c],i)=>{const b=document.createElement('button');b.type='button';b.className='choice'+(i===0?' active':'');b.title='Select '+name;b.innerHTML=`<div class="ball" style="${ballCss(c)};background-image:linear-gradient(145deg,#ffffff55,transparent 45%),url(${matchingMarbleImages[i]});background-size:cover;background-position:center"></div><span>${name}</span>`;b.onclick=()=>{if(finished||preRaceActive)return;selected=i;[...choiceRow.children].forEach((x,j)=>x.classList.toggle('active',j===selected));if(myMarble&&!finished){myMarble.index=i;myMarble.color=colors[i][1];syncPlayerPreview();update();toast('Your marble updated for all spectators (local demo)')}b.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'})};choiceRow.appendChild(b)});
 function toast(s){const e=$('toast');e.textContent=s;e.classList.add('show');clearTimeout(toastHandle);toastHandle=setTimeout(()=>e.classList.remove('show'),2300)}
 function update(){const n=entrants.length;$('count').textContent=n;$('pop').style.width=(n/60*100)+'%';const nextPool=(n*.1).toFixed(1);const poolEl=$('pool');const goldPool=$('goldPool');const shouldBump=lastPoolValue!==null&&lastPoolValue!==nextPool;poolEl.textContent=nextPool;if(shouldBump&&goldPool){goldPool.classList.remove('bump');void goldPool.offsetWidth;goldPool.classList.add('bump');clearTimeout(goldPool._bumpTimer);goldPool._bumpTimer=setTimeout(()=>goldPool.classList.remove('bump'),760)}lastPoolValue=nextPool;$('bowlCaption').textContent=raceDone?`Winner: ${raceWinner?.name||'Nobody'}`:raceActive?'Race in progress':n===0?'Waiting for racers':n===1?'1 racer ready':'Ready to race';$('join').disabled=Boolean(myMarble)||n>=60||finished;$('addOne').disabled=n>=60||finished;$('addTen').disabled=n>=60||finished;const recent=entrants.slice(-7).reverse();$('feed').innerHTML=recent.length?recent.map(p=>`<div class="feed-line"><span class="feed-dot" style="--color:${p.color}"></span><span>${esc(p.name)}</span><span class="status">✓ IN</span></div>`).join(''):'<div class="empty">No marbles yet. Be the first to join!</div>'}
 function esc(s){return s.replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
-function add(name,index){if(entrants.length>=60||finished)return null;const n=entrants.length,p={id:++idCounter,name:name.slice(0,18),color:colors[index][1],index,slot:n,tBorn:performance.now(),hue:Math.random()};entrants.push(p);particles.push({p,age:0,y:-78-Math.random()*110,vy:0,settled:false,bounces:0,landedAt:0});update();return p}
+function add(name,index){if(entrants.length>=60||finished)return null;window.MonadMarblesAudio?.sfx('join');const n=entrants.length,p={id:++idCounter,name:name.slice(0,18),color:colors[index][1],index,slot:n,tBorn:performance.now(),hue:Math.random()};entrants.push(p);particles.push({p,age:0,y:-78-Math.random()*110,vy:0,settled:false,bounces:0,landedAt:0});update();return p}
 const modal=$('walletModal');function closeModal(){modal.classList.remove('open');modal.setAttribute('aria-hidden','true')}function openModal(){modal.classList.add('open');modal.setAttribute('aria-hidden','false')}
 $('closeWallet').onclick=closeModal;modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 const connectBtn=$('connectWallet'); if(connectBtn) connectBtn.onclick=()=>openModal();
@@ -737,7 +808,7 @@ function beginPreRaceCountdown(){
  $('preRaceCountdown').hidden=false;stage.classList.add('pre-race');
  $('preRaceNumber').textContent='10';
  closeModal();$('join').disabled=true;
- timeUI();toast('Registration closed — race starts in 10!');
+ timeUI();toast('Registration closed — race starts in 10!');window.MonadMarblesAudio?.sfx('tick');
 }
 function finishPreRaceCountdown(){
  if(!preRaceActive)return;
@@ -836,7 +907,7 @@ function abortRace(reason){
  resetPreview();toast(reason||'Unable to prepare 3D race');
 }
 function beginRace(){
- if(raceActive||raceTransitioning)return;
+ if(raceActive||raceTransitioning)return;window.MonadMarblesAudio?.sfx('transition');
  if(entrants.length<2){toast('Add at least two racers before starting');return;}
  raceTransitioning=true;raceFrameReady=false;curtainCovered=false;hasRevealed=false;
  titleForCurtain('LETS ROLL NOW');
@@ -876,13 +947,13 @@ function beginRace(){
 }
 window.addEventListener('message',event=>{
  if(event.origin!==location.origin||event.source!==raceFrame.contentWindow)return;
- if(event.data?.type==='monadmarbles:race-ready'){
+ if(event.data?.type==='monadmarbles:audio'){window.MonadMarblesAudio?.sfx(String(event.data.sound||''));}else if(event.data?.type==='monadmarbles:race-ready'){
   if(!raceTransitioning)return;
   raceFrameReady=true;$('raceLoadingNote').hidden=true;tryReveal();
  }else if(event.data?.type==='monadmarbles:race-error'){
   abortRace('Could not initialize the 3D race. '+String(event.data.message||''));
  }else if(event.data?.type==='monadmarbles:race-finished'){
-  beginPodiumTransition();
+  window.MonadMarblesAudio?.sfx('win');beginPodiumTransition();
  }else if(event.data?.type==='monadmarbles:podium-ready'){
   if(podiumTransitioning){podiumReady=true;$('raceLoadingNote').hidden=true;tryRevealPodium();}
  }else if(event.data?.type==='monadmarbles:return-to-lobby'){
