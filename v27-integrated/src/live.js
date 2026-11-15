@@ -1,13 +1,18 @@
 import { io } from 'socket.io-client';
 import { createPaidIntegration, formatWei, testnetExplorerTx, validateOnchainRoom } from './paid.js';
+import { lobbyPresentation } from './lobby-status.js';
 
-const serverUrl = import.meta.env.VITE_RACE_SERVER_URL?.trim();
+// Only the preconfigured free sandbox may be selected; no arbitrary RPC URL.
+const freeDemo = new URLSearchParams(location.search).get('demo') === '1';
+const serverUrl = String(freeDemo ?
+  (import.meta.env.VITE_DEMO_RACE_SERVER_URL || '') :
+  (import.meta.env.VITE_RACE_SERVER_URL || '')).trim();
 const stage = document.querySelector('.stage');
 const isPaid = () => room?.demoOnly === false;
 const status = document.createElement('div');
 status.id = 'livePreviewStatus';
 status.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:400;background:#252054e8;color:white;border:1px solid #a399ef;border-radius:12px;padding:9px 14px;font:700 12px Nunito,sans-serif;max-width:360px';
-status.textContent = 'V27 SANDBOX · Connecting to shared race server…';
+status.textContent = freeDemo ? 'FREE DEMO · Connecting to sandbox server…' : 'MONAD TESTNET · Connecting to paid race server…';
 document.body.append(status);
 
 if (!serverUrl) {
@@ -69,6 +74,7 @@ const connectWallet = async () => {
     ui.setWallet(wallet);
     notify('MetaMask connected · ' + short(wallet));
     ui.applyRoom(room, wallet);
+    renderLiveControls();
     return wallet;
   })();
   try {
@@ -86,6 +92,7 @@ getMetaMaskProvider()?.on?.('accountsChanged', accounts => {
   wallet = accounts?.[0] || null;
   ui.setWallet(wallet);
   ui.applyRoom(room, wallet);
+  renderLiveControls();
 });
 getMetaMaskProvider()?.on?.('chainChanged', () => notify('Wallet network changed; switch to Monad Testnet'));
 
@@ -275,13 +282,23 @@ settlementPanel.id = 'onchainSettlementStatus';
 settlementPanel.style.cssText = 'display:none;position:fixed;bottom:44px;right:12px;z-index:325;background:#252054ee;color:white;border:1px solid #a399ef;border-radius:12px;padding:10px 14px;max-width:340px;font:700 12px Nunito,sans-serif;';
 document.body.append(settlementPanel);
 function renderLiveControls() {
-  if (!room) return;
+  standaloneWalletButton.textContent = wallet ?
+    '🦊 METAMASK CONNECTED · ' + short(wallet) : '🦊 CONNECT METAMASK';
+  if (!room) {
+    lobbyMessage.textContent = socket.connected ?
+      'Waiting for the shared race lobby…' :
+      'Connecting to the race server. You can still connect MetaMask.';
+    document.getElementById('join').disabled = true;
+    return;
+  }
   const paying = isPaid();
   document.getElementById('addOne').style.display = paying ? 'none' : '';
   document.getElementById('addTen').style.display = paying ? 'none' : '';
   instantStart.style.display = paying ? 'none' : '';
   createRaceButton.style.display = paying && room.blockchain?.status === 'waiting' ? '' : 'none';
+  createRaceButton.disabled = !socket.connected || paid.busy;
   cancelRaceButton.style.display = paying && ['open', 'closed', 'interrupted'].includes(room.blockchain?.status) ? '' : 'none';
+  cancelRaceButton.disabled = !socket.connected || paid.busy;
   const payment = paid.pending;
   pendingButton.style.display = paying && payment ? '' : 'none';
   pendingButton.disabled = paid.busy;
@@ -290,13 +307,14 @@ function renderLiveControls() {
   const feeLabel = paidFee === '?' ? 'TESTNET MON' : paidFee + ' TESTNET MON';
   const joined = hasEntry();
   const joinButton = document.getElementById('join');
-  joinButton.textContent = joined ? '✓ VERIFIED ON-CHAIN ENTRY' :
-    paying && paid.matchesPending() ? 'PAYMENT PENDING · CHECK STATUS' :
-    paying ? '✦ PAY ' + feeLabel + ' & JOIN ✦' : '✦ CONNECT & JOIN PREVIEW ✦';
-  joinButton.disabled = !socket.connected || !room ||
-    room.phase !== 'lobby' || joined ||
-    (paying && !ui.joinReady()) || paid.busy ||
-    (room.entries.length >= room.maxPlayers);
+  const view = lobbyPresentation({
+    room, connected:socket.connected, hasWallet:Boolean(wallet), joined,
+    pending:paying&&paid.matchesPending(), busy:paid.busy,
+    feeLabel, ready:!paying||ui.joinReady(),
+  });
+  joinButton.textContent = view.joinLabel;
+  joinButton.disabled = view.joinDisabled;
+  lobbyMessage.textContent = view.message;
   document.getElementById('walletTitle').textContent = paying ? 'CONNECT METAMASK · MONAD TESTNET' :
     'CONNECT METAMASK · FREE PREVIEW';
   document.querySelector('.wallet-disclaimer').textContent = paying ?
@@ -339,12 +357,22 @@ function renderLiveControls() {
   }
 }
 
+const standaloneWalletButton = document.getElementById('walletConnectCta');
+const lobbyMessage = document.getElementById('mmLobbyNotice');
+const modeSwitch = document.getElementById('mmModeSwitch');
+modeSwitch.href = freeDemo ? '/' : '/?demo=1';
+modeSwitch.textContent = freeDemo ? 'Switch to paid Monad Testnet races' : 'Want bots? Open the free demo (no MON)';
+standaloneWalletButton.onclick = async () => {
+  try { await connectWallet(); }
+  catch (error) { notify(error.message || 'Could not connect MetaMask'); }
+  finally { renderLiveControls(); }
+};
 const connectTop = document.getElementById('connectWallet');
 if (connectTop) connectTop.onclick = () => document.getElementById('walletModal').classList.add('open');
 
-socket.on('connect', () => { status.textContent = 'V27 SANDBOX · Connected · waiting for lobby'; });
-socket.on('disconnect', () => { status.textContent = 'V27 SANDBOX · Reconnecting, controls disabled'; ui.setConnected(false); });
-socket.on('connect_error', () => { status.textContent = 'V27 SANDBOX · Cannot reach race server'; ui.setConnected(false); });
+socket.on('connect', () => { status.textContent = 'Connected · waiting for race state'; renderLiveControls(); });
+socket.on('disconnect', () => { status.textContent = 'Race server reconnecting · wallet remains available'; ui.setConnected(false); renderLiveControls(); });
+socket.on('connect_error', () => { status.textContent = 'Cannot reach race server · retrying'; ui.setConnected(false); renderLiveControls(); });
 socket.on('lobby:state', next => {
   const prev = room;
   room = next;
@@ -374,4 +402,5 @@ socket.on('race:result', result => {
 });
 socket.on('race:error', error => notify(error));
 
+renderLiveControls();
 export { socket };
