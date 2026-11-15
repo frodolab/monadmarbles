@@ -1,0 +1,12 @@
+{
+  "network": "Monad Testnet",
+  "chainId": 10143,
+  "address": "0x9fB46e07dFcEad9B51799aD4B5A5b8a2c254c55B",
+  "deployedBy": "0xB3523eFd8b76a19B7206be74c166759d287c138e",
+  "deploymentTxHash": "0xe23774547da25d79ceb79a5279f0c525d0afbecbe68d92e7555ff1fab69c5c0a",
+  "rpcUrl": "https://testnet-rpc.monad.xyz",
+  "explorerUrl": "https://testnet.monadexplorer.com",
+  "sourceBranch": "feature/monad-testnet-contracts",
+  "sourceCommit": "7e5db3284f9a9afcec71e94f619090c7be271890",
+  "verificationNote": "Deployment details reported by operator. Confirm receipt status, chain bytecode and owner using cast before accepting testnet entries."
+}

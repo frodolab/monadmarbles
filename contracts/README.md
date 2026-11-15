@@ -138,3 +138,29 @@ confirmed your faucet funding, and agreed on the operator-wallet setup.**
   not hardcode 0.1 MON.
 - One wallet per marble per race; multiple entries per wallet would require a
   later contract change and coordinated frontend/backend update.
+
+
+## Reported Monad Testnet deployment
+
+The operator provided these public details for chain 10143:
+
+- Contract: `0x9fB46e07dFcEad9B51799aD4B5A5b8a2c254c55B`
+- Owner/deployer: `0xB3523eFd8b76a19B7206be74c166759d287c138e`
+- Deployment transaction: `0xe23774547da25d79ceb79a5279f0c525d0afbecbe68d92e7555ff1fab69c5c0a`
+
+The public details are recorded in `deployments/10143.json`. They are **not**
+independently verified from this development environment; confirm with:
+
+```powershell
+$rpc = "https://testnet-rpc.monad.xyz"
+$contract = "0x9fB46e07dFcEad9B51799aD4B5A5b8a2c254c55B"
+cast receipt 0xe23774547da25d79ceb79a5279f0c525d0afbecbe68d92e7555ff1fab69c5c0a --rpc-url $rpc
+cast code $contract --rpc-url $rpc
+cast call $contract "owner()(address)" --rpc-url $rpc
+cast call $contract "activeRaceId()(uint256)" --rpc-url $rpc
+cast call $contract "nextRaceId()(uint256)" --rpc-url $rpc
+```
+
+Expected freshly deployed state: owner matches the deployer, active race ID is
+zero, and next race ID is one. **Do not create a paid-entry race until backend
+verification and race state recovery are ready.**

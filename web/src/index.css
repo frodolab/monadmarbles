@@ -107,3 +107,11 @@ button:not(:disabled):hover { filter:brightness(1.11); }
 
 .official-race-id { color:#bcaee9; font-size:10px; margin-top:9px; letter-spacing:0.6px; font-variant-numeric:tabular-nums; }
 .winner-card strong small { font-size:11px; font-weight:650; color:#a9edcf; }
+
+/* Beta 4B - testnet contract readout (no payment transactions yet) */
+.wallet-onchain { border:1px solid #c0a4f744; border-radius:13px; background:#2722456c; padding:14px; margin-top:15px; }
+.wallet-onchain-title {font-size:10px; font-weight:850; letter-spacing:1.1px; color:#d9c7ff;}
+.wallet-onchain-address {font-size:10px; color:#8f9fbc; line-height:1.6; word-break:break-all; margin:6px 0 10px;}
+.wallet-onchain-detail {display:flex; flex-direction:column; gap:4px; color:#ded5f8; margin:12px 0; font-size:12px;}
+.wallet-onchain-detail small {color:#a3a8c8; line-height:1.6;}
+.wallet-onchain .secondary-button,.wallet-onchain .outline-button {font-size:11px;}

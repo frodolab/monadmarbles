@@ -1,7 +1,7 @@
-name: Beta 2 build check
+name: Web and server regression
 on:
   push:
-    branches: [beta]
+    branches: [beta, feature/monad-testnet-contracts]
   pull_request:
     branches: [main, beta]
 

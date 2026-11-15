@@ -4,12 +4,16 @@ import RaceScene from "./components/RaceScene";
 import { DESIGNS } from "./game";
 import { useLobby } from "./hooks/useLobby";
 import { countdownSeconds } from "./utils/countdown";
+import { connectMetaMask, readContractOverview, contractAddress, type ContractOverview } from "./chain/monad";
 
 export default function App() {
   const { room, frame, countdownAnchor, mode, hasServerUrl, join, fill, start, reset } = useLobby();
   const [nickname, setNickname] = useState("");
   const [designIndex, setDesignIndex] = useState(0);
   const [operatorPin, setOperatorPin] = useState("");
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [chainOverview, setChainOverview] = useState<ContractOverview | null>(null);
+  const [chainMessage, setChainMessage] = useState("Checking Monad Testnet contract…");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [autoFollow, setAutoFollow] = useState(true);
@@ -23,6 +27,29 @@ export default function App() {
   useEffect(() => {
     setNotice("");
   }, [room.roundId]);
+
+  async function refreshChain() {
+    try {
+      const state = await readContractOverview();
+      setChainOverview(state);
+      setChainMessage("");
+    } catch (error) {
+      setChainMessage(error instanceof Error ? error.message : "Unable to read contract.");
+    }
+  }
+
+  useEffect(() => { void refreshChain(); }, []);
+
+  async function connect() {
+    try {
+      const address = await connectMetaMask();
+      setWalletAddress(address);
+      setChainMessage("Wallet connected on Monad Testnet. Paid race entries are not enabled in this preview.");
+      void refreshChain();
+    } catch (error) {
+      setChainMessage(error instanceof Error ? error.message : "Could not connect wallet.");
+    }
+  }
 
   const currentDesign = DESIGNS[designIndex];
   const isLobby = room.phase === "lobby";
@@ -64,7 +91,7 @@ export default function App() {
         <div className="brand">
           <div className="brand-logo">M</div>
           <div>
-            <div className="eyebrow">MONAD BLITZ · BETA 3.1 · SYNC FIX</div>
+            <div className="eyebrow">MONAD BLITZ · BETA 4B · WALLET PREVIEW</div>
             <h1>MONAD <span>MARBLES</span></h1>
           </div>
         </div>
@@ -115,7 +142,24 @@ export default function App() {
             disabled={!isLobby || busy || room.entries.length >= room.maxPlayers || (hasServerUrl && mode !== "shared")}
             onClick={() => void addMarble()}
           >+ JOIN DEMO RACE</button>
-          <p className="fine-print">No wallet · No actual MON · No payment is collected</p>
+          <p className="fine-print">Demo entry only; this button does not send MON.</p>
+
+          <div className="wallet-onchain">
+            <div className="wallet-onchain-title">MONAD TESTNET · CONTRACT</div>
+            <div className="wallet-onchain-address">{contractAddress}</div>
+            <button className="secondary-button" type="button" onClick={() => void connect()}>
+              {walletAddress ? "CONNECTED: " + walletAddress.slice(0, 6) + "…" + walletAddress.slice(-4) : "CONNECT METAMASK"}
+            </button>
+            <div className="wallet-onchain-detail">
+              <strong>{chainOverview?.status || "CHECKING CONTRACT"}</strong>
+              {chainOverview?.activeRaceId && (
+                <span>Race #{chainOverview.activeRaceId} · {chainOverview.entryCount}/{chainOverview.maxEntries} registered · {chainOverview.feeMON} testnet MON / entry</span>
+              )}
+              <small>Wallet connectivity/read-only preview. Real entries and payouts are not yet wired to the race server.</small>
+            </div>
+            {chainMessage && <p className="fine-print">{chainMessage}</p>}
+            <button className="outline-button" type="button" onClick={() => void refreshChain()}>REFRESH CHAIN STATUS</button>
+          </div>
 
           <div className="divider" />
           <div className="small-title">RECENT ENTRIES <span>{room.entries.length}/{room.maxPlayers}</span></div>
@@ -242,7 +286,7 @@ export default function App() {
                 : "No race-server URL is configured. This is a local-only demo."}
           </p>
           <p className="muted explanation">
-            All browsers use the same authoritative race result. This is still a mock-entry demo, without blockchain payments or verified fairness.
+            All browsers use the same authoritative race result. Wallet connectivity is a preview; the existing Join Demo Race action is still simulated.
           </p>
         </aside>
       </div>

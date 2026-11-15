@@ -55,3 +55,17 @@ Test from two browsers: top-right should say **LIVE · SHARED PHYSICS**. Add a r
 - Frame update rate is a starting configuration. Performance with 48 marbles should be load-tested.
 
 Next: Monad testnet contract-entry integration and verifiable race inputs/results.
+
+
+## Beta 4B wallet read-only preview (feature branch)
+
+The Monad contract deployment was reported on chain ID 10143 at
+`0x9fB46e07dFcEad9B51799aD4B5A5b8a2c254c55B`. The deployment details
+are in `contracts/deployments/10143.json`.
+
+The React UI now supports injected MetaMask connection and reads public contract
+state using Viem. **This preview does not call `joinRace` and must not be
+advertised as paid entry registration.** Demo entries still use Socket.IO.
+
+Before sending any testnet MON to the contract, we must finish independent
+backend event verification and safe on-chain/off-chain race-ID coordination.
