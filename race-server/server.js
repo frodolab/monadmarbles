@@ -31,7 +31,7 @@ const io = new Server(httpServer, {
 });
 
 const maxPlayers = paidMode ? 48 : Math.max(2, Math.min(120, Number(process.env.MAX_PLAYERS) || 48));
-const designs = ["violet", "tangerine", "aqua", "rose", "lime", "gold", "blue", "mint"];
+const designs = ["violet", "tangerine", "aqua", "rose", "lime", "gold", "blue", "mint", "peach", "cotton", "sky", "midnight", "galaxy", "golden"];
 const demoEntryFee = 0.1;
 const operatorPin = process.env.OPERATOR_PIN || "";
 if (paidMode && !operatorPin) throw new Error("On-chain entry mode requires OPERATOR_PIN.");
