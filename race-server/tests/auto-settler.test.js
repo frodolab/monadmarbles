@@ -106,6 +106,49 @@ async function main() {
     }),/Refusing to overwrite/);
     console.log("PASS winner journal is immutable against conflicting result");
 
+    // PIN-authorized server close uses the relayer, not the browser wallet.
+    const closeDir = fs.mkdtempSync(path.join(os.tmpdir(), "marbles-close-"));
+    try {
+      const closeChain = fakeChain();
+      closeChain.state.status = 1;
+      let pendingReceipt;
+      const blocker = new Promise(resolve => { pendingReceipt = resolve; });
+      closeChain.publicClient.readContract = async ({ functionName }) => {
+        if (functionName === "AUTO_PAYOUT") return true;
+        if (functionName === "owner") return other;
+        if (functionName === "settler") return owner;
+        if (functionName === "activeRaceId") return 1n;
+        if (functionName === "races") return [closeChain.state.status, 100000000000000000n,
+          200000000000000000n, 0n, 123n, 0n, 48, 2, false];
+        throw new Error("Unexpected method: " + functionName);
+      };
+      let closeCalls = 0;
+      closeChain.walletClient.writeContract = async ({ functionName, args }) => {
+        assert.equal(functionName, "closeEntries");
+        assert.deepEqual(args, [1n]);
+        closeCalls++;
+        return hash;
+      };
+      closeChain.publicClient.waitForTransactionReceipt = async () => {
+        await blocker;
+        closeChain.state.status = 2;
+        return { status: "success" };
+      };
+      const closer = createAutoSettler({ env: envConfig(closeDir),
+        publicClient: closeChain.publicClient, walletClient: closeChain.walletClient });
+      const submitted = [];
+      const operation = closer.closeEntries("1", value => submitted.push(value));
+      await new Promise(resolve => setImmediate(resolve));
+      await assert.rejects(closer.closeEntries("1"), /already in progress/);
+      assert.equal(closeCalls, 1);
+      assert.equal(submitted[0], hash);
+      pendingReceipt();
+      assert.equal(await operation, hash);
+      assert.equal(closeChain.state.status, 2);
+      await assert.rejects(closer.closeEntries("1"), /not open/);
+      console.log("PASS relayer closes once, waits for receipt, blocks duplicate start and rejects closed race");
+    } finally { fs.rmSync(closeDir, { recursive: true, force: true }); }
+
     const otherDirectory=fs.mkdtempSync(path.join(os.tmpdir(),"marbles-autopayout-bad-"));
     try {
       const wrong=fakeChain();wrong.state.automatic=false;
