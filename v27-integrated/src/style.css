@@ -1,0 +1,107 @@
+@import url('https://fonts.googleapis.com/css2?family=Lilita+One&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap');
+*{box-sizing:border-box}body{margin:0;overflow:hidden;background:#b9e7f2;color:#fff;font-family:Nunito,system-ui,sans-serif}canvas{display:block}#scene{position:fixed;inset:0}.logo{position:fixed;left:22px;top:16px;font-weight:900;font-size:25px;letter-spacing:-1px;text-shadow:0 3px 10px #332264aa}.logo span{color:#ffda6a}.logo small{display:block;font-size:10px;letter-spacing:1.5px;color:#fff}.pool{position:fixed;top:15px;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;text-shadow:0 4px 16px #43216a}.pool small{font-size:12px;font-weight:900;letter-spacing:2px;color:#fff5b1}.pool strong{display:block;font-size:clamp(35px,5vw,68px);line-height:1.08;font-weight:900;color:#ffea6c;filter:drop-shadow(0 0 12px #ffb43c)}.pool.final{animation:pulse 1s infinite alternate}.pool.final strong{font-size:clamp(48px,6vw,84px)}@keyframes pulse{to{transform:translateX(-50%) scale(1.12)}}.panel{position:fixed;background:#2a2059df;border:1px solid #a895f088;box-shadow:0 12px 35px #26175555;backdrop-filter:blur(10px);border-radius:19px;padding:15px}.left{left:18px;top:95px;width:255px;max-height:calc(100vh - 112px);overflow:auto}.right{right:18px;top:95px;width:210px}.panel h2{margin:0 0 10px;font-size:17px}.panel label{display:block;color:#c7bff4;font-size:11px;font-weight:900;letter-spacing:1px;margin:10px 0 5px}.panel input{width:100%;background:#130e35;border:1px solid #8275b6;border-radius:10px;padding:10px;color:white;font:inherit}.swatches{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.swatch{height:30px;width:30px;border:2px solid #ffffff88;border-radius:50%;cursor:pointer}.swatch.selected{outline:2px solid white;outline-offset:2px}button{cursor:pointer;background:#ffe074;color:#241744;border:0;border-radius:10px;padding:9px 12px;font:900 12px Nunito,system-ui;margin:3px 3px 5px 0}button.alt{background:#77e5ea}button.pink{background:#ff91c6}button:disabled{opacity:.45;cursor:not-allowed}.muted{font-size:12px;color:#d1c9ef;line-height:1.45}.divider{height:1px;background:#ffffff22;margin:12px 0}.row{display:flex;align-items:center;justify-content:space-between;gap:8px}.entry{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ffffff22;font-size:12px}.entry b{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}.actions{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#2a2059dc;border:1px solid #ffffff44;border-radius:16px;padding:9px;white-space:nowrap}.status{position:fixed;bottom:18px;right:18px;background:#2a2059b9;padding:8px 12px;border-radius:10px;font-size:12px}.toast{position:fixed;top:120px;left:50%;transform:translateX(-50%);background:#ffe275;color:#342056;padding:12px 20px;border-radius:14px;font-weight:900;display:none;z-index:6}.finish{display:none;position:fixed;inset:0;align-items:center;justify-content:center;background:#170e3bcc;z-index:10}.finish>div{background:#35236d;border:2px solid #ad8bff;border-radius:25px;padding:35px;text-align:center}.finish h1{color:#ffe275}.hidden{display:none!important}body.racing .left{display:none}body.racing .actions #start{display:none}body.racing .actions{opacity:.8}body.racing .right{width:185px}@media(max-width:750px){.logo{font-size:18px;left:8px}.left{top:125px;left:6px;width:190px;padding:10px}.right{right:6px;top:125px;width:135px;padding:9px}.pool{top:55px}.pool strong{font-size:31px}.actions{bottom:8px}.status{display:none}}
+
+.my-entry{border:2px solid #ffda50;background:#ffda5022;border-radius:9px;padding:9px 6px;color:#ffe57b}.back{color:#ffdf76;font-weight:900;text-decoration:none}.left{width:195px}.actions #reset{display:none}body.racing .left{display:block}body.racing .actions{display:none}
+
+.camera-ui{position:fixed;right:18px;top:320px;z-index:5;background:#2a2059dc;border:1px solid #a895f088;padding:10px;border-radius:13px;display:flex;gap:7px;align-items:center;font-size:11px;font-weight:900}.camera-ui select{background:#3a2872;color:white;border:1px solid #aa98ef;border-radius:8px;padding:7px;max-width:145px}@media(max-width:750px){.camera-ui{right:6px;top:310px;flex-direction:column}}
+
+/* V19: in-scene podium, elegant transparent HUD instead of a blocking modal. */
+body.show-podium .left,body.show-podium .right,body.show-podium .camera-ui,body.show-podium .pool,body.show-podium .logo{display:none!important}
+.finish{background:linear-gradient(180deg,#1b124997 0%,transparent 34%,transparent 61%,#160e3abc 100%);pointer-events:none;flex-direction:column;justify-content:space-between;align-items:center;padding:14px 16px 18px;gap:4px}
+.finish .podium-header{text-align:center;max-width:min(640px,95vw);pointer-events:none;text-shadow:0 3px 13px #261254}
+.podium-header>small{font-size:10px;font-weight:900;letter-spacing:3px;color:#e7d4ff}
+.podium-header h1{font-size:clamp(26px,4.5vw,49px);margin:2px 0 4px;color:#ffecaa;line-height:1.1}
+.winnings{display:flex;flex-direction:column;gap:0;align-items:center}
+.winnings span{font-weight:900;letter-spacing:1px;color:#ffefaa;font-size:clamp(10px,1.6vw,13px)}
+.winnings strong{font-weight:1000;color:#fff1a8;text-shadow:0 0 12px #ffc329,0 0 30px #ffe450,0 0 55px #f1a619;font-size:clamp(32px,5.7vw,66px);line-height:1.05;animation:prize-glow 1.7s ease-in-out infinite alternate}
+.winnings small{font-size:10px;color:#fce7b0;letter-spacing:1.2px;font-weight:900}
+@keyframes prize-glow{to{filter:brightness(1.25);text-shadow:0 0 19px #fff2b0,0 0 41px #ffdc55,0 0 80px #ffc82d}}
+.podium-bottom{width:min(920px,96vw);text-align:center;pointer-events:none}
+.podium-labels{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:end}
+.podium-label{background:#2b1c69d9;border:1px solid #ffffff67;border-radius:15px;padding:10px 8px;display:flex;flex-direction:column;gap:1px;box-shadow:0 5px 23px #160b3f91}
+.podium-label:first-child{order:0}.podium-label:nth-child(2){order:1}.podium-label:nth-child(3){order:2}
+.podium-label span{font-size:10px;letter-spacing:1px;font-weight:900;color:#dec9ff}.podium-label strong{font-size:clamp(13px,2vw,19px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.podium-first{border:2px solid #ffdf67;box-shadow:0 0 28px #ffd4536b}
+.podium-actions p{margin:9px 0 4px;font-size:10px;font-weight:900;color:#f3e4ff;text-shadow:0 2px 6px #321e62}
+.podium-actions button{pointer-events:auto;background:linear-gradient(140deg,#ffe487,#ffb84a);font-size:14px;border:2px solid white;padding:10px 25px;box-shadow:0 5px 0 #aa6724}
+@media(max-width:600px){.finish{padding:12px 8px}.winnings strong{font-size:38px}.podium-labels{gap:5px}.podium-label{padding:9px 3px}.podium-label span{font-size:8px}.podium-actions p{font-size:9px}}
+
+/* V20: readable winner headline and restrained, legible prize illumination. */
+.podium-header h1{color:#f2e1b3;text-shadow:0 2px 8px #24164166}
+.winnings strong{color:#f5dda1;text-shadow:0 0 7px #dba64377,0 0 16px #c18b2970;animation:prize-glow-v20 2.4s ease-in-out infinite alternate}
+@keyframes prize-glow-v20{to{text-shadow:0 0 10px #dfba6577,0 0 22px #cd942f66}}
+
+/* V22: short, GPU-friendly curtain masks the long camera reposition on results. */
+#scene::after{content:"";position:fixed;inset:0;pointer-events:none;background:#281a57;opacity:0;transition:opacity .32s ease;z-index:8;}
+body.podium-transition #scene::after{opacity:0.96;transition:none;}
+body.podium-transition .finish{opacity:0;}
+body.show-podium:not(.podium-transition) .finish{opacity:1;}
+.finish{transition:opacity .48s ease;}
+
+/* V23 brand cleanup */
+.clean-race-logo{font-family:Inter,ui-sans-serif,system-ui,sans-serif!important;text-transform:none!important;letter-spacing:-.8px!important;font-weight:900!important}
+.clean-race-logo span{color:inherit!important}
+
+
+/* V25 — Reagan's V34 design language, applied consistently to 3D race and podium. */
+body{font-family:'Nunito',ui-rounded,system-ui,sans-serif;background:#75dfcf}
+.logo.clean-race-logo{display:flex;align-items:center;gap:.20em;left:clamp(12px,2vw,28px);top:16px;
+ font-family:'Lilita One',sans-serif!important;font-size:clamp(20px,2.45vw,35px)!important;
+ font-weight:400!important;letter-spacing:0!important;white-space:nowrap;z-index:7;
+ text-shadow:0 2px 0 #7655c0,0 4px 0 #443273,0 6px 10px #233e5838!important}
+.race-monad{color:#fffaf0!important;display:inline-flex;align-items:center}
+.race-monad img{width:1.08em;height:1.08em;object-fit:contain;margin:0 .09em;filter:drop-shadow(0 2px 0 #504180)}
+.race-marbles{color:#ffdc68!important}
+.panel,.camera-ui{background:#23225de9;border:2px solid #a39bff;box-shadow:0 8px 0 #654cbf4b,0 20px 30px #184c654d;border-radius:20px}
+.panel h2{font-family:'Lilita One',sans-serif;font-weight:400;color:#ffdd89;letter-spacing:.3px}
+.panel .row h2{color:#edc4f9}
+.panel .muted{color:#d8cff0}
+.camera-ui{font-family:'Nunito',sans-serif}
+.camera-ui select{background:#fffaf2;color:#32265b;font-family:'Nunito',sans-serif;font-weight:900;border:2px solid #ad94ed}
+button{border-radius:13px;box-shadow:0 4px 0 #a47a3a;font-family:'Nunito',sans-serif}
+button:hover{filter:brightness(1.06)}
+.pool{display:flex;align-items:center;justify-content:center;gap:15px;top:13px;min-width:205px;
+ padding:9px 22px 8px;background:linear-gradient(110deg,#87550c,#deae34 26%,#fff2a2 48%,#dba92c 70%,#9a661b);
+ border:2px solid #fff2b5;border-radius:20px;box-shadow:0 5px 0 #81541b,0 9px 21px #392b5865;
+ text-shadow:none;z-index:6;transform:translateX(-50%)}
+.pool .pool-monad{position:relative;display:flex;align-items:center;justify-content:center;
+ flex:none;width:35px;height:35px;border-radius:9px;transform:rotate(45deg);
+ background:linear-gradient(135deg,#fff9c8,#ffc944,#b87b0b);box-shadow:0 2px 0 #986212,inset 0 3px 7px #fff8}
+.pool .pool-monad-inner{display:block;width:16px;height:16px;border-radius:5px;
+ background:#7abebe66;box-shadow:inset 0 0 0 5px #fff2b7}
+.race-pool-stack{display:flex;flex-direction:column;align-items:center}
+.pool .race-pool-stack>small{font-family:'Nunito',sans-serif;color:#5d3983;font-size:9px;font-weight:1000;letter-spacing:1.2px}
+.pool .race-pool-stack>small:first-child{font-family:'Lilita One',sans-serif;color:#72501b;font-size:13px;letter-spacing:1px}
+.pool strong{font-family:'Lilita One',sans-serif;display:block;font-size:clamp(22px,2.6vw,35px);
+ line-height:1;color:#fff1a7;text-shadow:0 2px 0 #8c5a12,0 0 14px #fff1a9}
+.pool .race-preview-notice{font-family:'Nunito',sans-serif;font-size:8px;color:#694b26;letter-spacing:.3px}
+.pool.final{animation:none}
+.pool.final strong{font-size:clamp(24px,2.9vw,39px)}
+#scene::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.1;
+ background-image:radial-gradient(#386c79 1px,transparent 1px);background-size:15px 15px}
+body[data-theme="midnight"] #scene::before{opacity:.15;background-image:radial-gradient(#e6c6ff 1px,transparent 1px)}
+body[data-theme="moon"] #scene::before{opacity:.10}
+body[data-theme="rainbow"] #scene::before{opacity:.13}
+body[data-theme="castle"] #scene::before{opacity:.11}
+.finish .podium-header h1{font-family:'Lilita One',sans-serif;font-weight:400;
+ color:#ffe18a;font-size:clamp(33px,5vw,64px);text-shadow:0 3px 0 #594084,0 7px 16px #24155066}
+.podium-header>small,.winnings span,.podium-label span{font-family:'Nunito',sans-serif;font-weight:1000}
+.winnings strong{font-family:'Lilita One',sans-serif;font-weight:400;color:#ffeab0;font-size:clamp(35px,5.8vw,65px)}
+.podium-label{background:#23225de8;border:2px solid #a39bff;box-shadow:0 5px 0 #654cbf60,0 12px 22px #184c654d}
+.podium-first{border-color:#ffe078;box-shadow:0 5px 0 #b27c36,0 0 20px #ffd35e80}
+.podium-label strong{font-family:'Lilita One',sans-serif;font-weight:400}
+.podium-actions button{font-family:'Lilita One',sans-serif;font-weight:400;font-size:16px;box-shadow:0 5px 0 #a95d7e}
+@media(max-width:900px){.logo.clean-race-logo{font-size:20px!important;left:10px;top:10px}
+ .pool{top:51px;padding:5px 10px;gap:8px;min-width:145px;border-radius:13px}
+ .pool .pool-monad{width:22px;height:22px;border-radius:6px}
+ .pool .pool-monad-inner{width:10px;height:10px;border-radius:3px;box-shadow:inset 0 0 0 3px #fff2b7}
+ .pool strong{font-size:23px}.pool.final strong{font-size:25px}
+ .panel{top:125px}.left{left:7px;width:180px}.right{right:7px;width:142px}
+ .camera-ui{right:7px;top:310px}
+}
+@media(max-width:600px){.logo.clean-race-logo{font-size:17px!important}
+ .pool{top:48px}.panel{top:114px}.left{width:140px;padding:8px}.right{width:130px;padding:8px}
+ .panel h2{font-size:14px}.camera-ui{top:315px;max-width:140px}
+ .finish{padding:10px 7px}.podium-header>small{font-size:8px}
+}
