@@ -125,7 +125,13 @@ function snapshot() {
     maxPlayers,
     demoEntryFee,
     demoOnly: !paidMode,
-    blockchain: chainAdmission ? chainAdmission.snapshot : null,
+    blockchain: chainAdmission ? {
+      ...chainAdmission.snapshot,
+      // Public identifiers only. Private settlement keys never leave the server.
+      chainId: 10143,
+      contractAddress: chainConfig.address,
+      autoPayoutEnabled,
+    } : null,
     payout: room.payout || null,
     raceClose: paidMode ? { status: closeStatus, txHash: closeTxHash } : null,
     authoritativePhysics: true,
@@ -179,6 +185,9 @@ function finishRace() {
   room.phase = "finished";
   room.winnerId = engine.winnerId;
   room.finishOrder = [...engine.finishOrder];
+  // Retain the verified pool for the result screen even after V2 finalizes
+  // and activeRaceId becomes zero. This is presentation data, never a payout instruction.
+  if (paidMode && !room.prizePoolWei) room.prizePoolWei = chainAdmission.snapshot.poolWei || null;
 
   if (autoSettler) {
     try {
@@ -436,6 +445,7 @@ io.on("connection", (socket) => {
             !chainAdmission.canStart || chainAdmission.snapshot.chainRaceId !== raceId)
           throw new Error("On-chain race is not confirmed closed and fully synchronized.");
       }
+      if (paidMode) room.prizePoolWei = chainAdmission.snapshot.poolWei || null;
       room.phase = "countdown";
       room.startsAt = Date.now() + countdownMs;
       reply(ack, true);
