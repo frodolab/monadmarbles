@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { formatEther } from "viem";
 import type { Result, RoomState } from "../game";
 import {
-  closeRaceEntries, createTestnetRace, submitRaceEntry,
+  createTestnetRace, submitRaceEntry,
   waitForTestnetTransaction, testnetExplorerTx, cancelTestnetRace, claimTestnetRefund,
 } from "../chain/monad";
 
@@ -188,37 +188,18 @@ export function PaidOperatorControls({
   }
 
   async function begin() {
-    if (!walletAddress || !chain?.chainRaceId) {
-      setNotice("Connect the operator wallet first.");
-      return;
-    }
     if (!operatorPin.trim()) {
       setNotice("Enter the operator PIN.");
       return;
     }
     setBusy(true);
     try {
-      if (chain.status === "open") {
-        // One manual Start click causes an on-chain close followed by the
-        // existing server-authoritative ten-second countdown.
-        const hash = await closeRaceEntries(walletAddress, chain.chainRaceId);
-        setNotice("Waiting for on-chain close confirmation: " + hash);
-        await waitForTestnetTransaction(hash);
-      }
-      let lastError = "The server has not confirmed the closed on-chain race.";
-      // Server rechecks chain status and the full confirmed roster before ack.
-      for (let n = 0; n < 12; n++) {
-        const response = await start(operatorPin);
-        if (response.ok) {
-          setNotice("On-chain entries closed. The synchronized 10-second countdown has started.");
-          return;
-        }
-        lastError = response.error || lastError;
-        if (n < 11) await new Promise(resolve => window.setTimeout(resolve, 1200));
-      }
-      setNotice(lastError + " No race was started; retry only after the server is synced.");
+      setNotice("Server is securely closing on-chain entries and checking confirmations…");
+      const response = await start(operatorPin);
+      if (!response.ok) throw new Error(response.error || "The server could not start the race.");
+      setNotice("On-chain entries confirmed closed. The synchronized 10-second countdown has started.");
     } catch (e) {
-      setNotice(errorMessage(e) + " No race was started if on-chain close failed.");
+      setNotice(errorMessage(e));
     } finally { setBusy(false); }
   }
 
@@ -244,19 +225,27 @@ export function PaidOperatorControls({
       )}
       {hasRace && (
         <button className="primary-button" type="button"
-          disabled={busy || !connected || !walletAddress || !operatorPin ||
+          disabled={busy || !connected || !operatorPin ||
             room.phase !== "lobby" || room.entries.length < 2 ||
-            !chain?.synced || (chain.status !== "open" && !chain.canStart)}
+            !chain?.synced || (chain.status !== "open" && !chain.canStart) ||
+            room.raceClose?.status === "submitting"}
           onClick={() => void begin()}>
-          {chain?.status === "closed" ? "▶ START CONFIRMED CLOSED RACE" : "▶ CLOSE ENTRIES & START RACE"}
+          ▶ START RACE (PIN ONLY)
         </button>
       )}
       {hasRace && (chain?.status === "open" || chain?.status === "closed" || chain?.status === "interrupted") && (
         <button className="outline-button" type="button" disabled={busy || !walletAddress}
           onClick={() => void cancel()}>CANCEL RACE ON-CHAIN / ALLOW REFUNDS</button>
       )}
+      {room.raceClose && room.raceClose.status !== "idle" && (
+        <div className="wallet-onchain" role="status">
+          <div className="wallet-onchain-title">ON-CHAIN RACE CLOSING</div>
+          <p className="fine-print">{room.raceClose.status === "submitting" ? "The authorized server wallet is closing entries on Monad Testnet…" : room.raceClose.status === "confirmed" ? "Entries closed and confirmed on-chain." : "Close request needs attention; check race state before retrying."}</p>
+          {room.raceClose.txHash && <a href={testnetExplorerTx(room.raceClose.txHash)} target="_blank" rel="noreferrer">View closeEntries transaction on Monad Explorer</a>}
+        </div>
+      )}
       <p className="fine-print">
-        Operator retains manual control; countdown is 10 seconds.
+        PIN-only start uses the authorized Railway settler wallet; no operator MetaMask confirmation is needed. Countdown remains 10 seconds.
         If the server restarts during a closed race, it locks the round for cancellation/refund instead of rerunning it.
       </p>
       {notice && <p className="notice" role="status">{notice}</p>}
