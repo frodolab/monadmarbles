@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { formatEther } from "viem";
 import BowlScene from "./components/BowlScene";
 import RaceScene from "./components/RaceScene";
+import { PaidEntryControls, PaidOperatorControls } from "./components/OnchainControls";
 import { DESIGNS } from "./game";
 import { useLobby } from "./hooks/useLobby";
 import { countdownSeconds } from "./utils/countdown";
 import { connectMetaMask, readContractOverview, contractAddress, type ContractOverview } from "./chain/monad";
 
 export default function App() {
-  const { room, frame, countdownAnchor, mode, hasServerUrl, join, fill, start, reset } = useLobby();
+  const { room, frame, countdownAnchor, mode, hasServerUrl, join, verify, fill, start, reset } = useLobby();
   const [nickname, setNickname] = useState("");
   const [designIndex, setDesignIndex] = useState(0);
   const [operatorPin, setOperatorPin] = useState("");
@@ -52,9 +54,12 @@ export default function App() {
   }
 
   const currentDesign = DESIGNS[designIndex];
+  const onchain = room.blockchain?.mode === "onchain";
   const isLobby = room.phase === "lobby";
   const showingRace = room.phase === "racing" || room.phase === "finished";
-  const pool = (room.entries.length * room.demoEntryFee).toFixed(1);
+  const pool = onchain && room.blockchain?.poolWei
+    ? Number(formatEther(BigInt(room.blockchain.poolWei))).toFixed(2)
+    : (room.entries.length * room.demoEntryFee).toFixed(1);
   const countdown = room.phase === "countdown" ? countdownSeconds(countdownAnchor, clock) : 0;
   const winner = useMemo(
     () => room.entries.find((entry) => entry.id === room.winnerId),
@@ -91,7 +96,7 @@ export default function App() {
         <div className="brand">
           <div className="brand-logo">M</div>
           <div>
-            <div className="eyebrow">MONAD BLITZ · BETA 4B · WALLET PREVIEW</div>
+            <div className="eyebrow">MONAD BLITZ · BETA 4B · VERIFIED ENTRIES</div>
             <h1>MONAD <span>MARBLES</span></h1>
           </div>
         </div>
@@ -105,7 +110,9 @@ export default function App() {
         <aside className="panel entry-panel">
           <div className="panel-topline">01 / ENTER THE BOWL</div>
           <h2>Choose your <em>marble.</em></h2>
-          <p className="muted">Every entry becomes a marble. This beta uses simulated entries only.</p>
+          <p className="muted">{onchain
+            ? "Verified Monad Testnet transactions create marbles in the shared bowl."
+            : "Every demo entry becomes a marble. No cryptocurrency is collected."}</p>
 
           <div className="design-picker">
             <button
@@ -139,10 +146,12 @@ export default function App() {
           <button
             className="primary-button"
             type="button"
-            disabled={!isLobby || busy || room.entries.length >= room.maxPlayers || (hasServerUrl && mode !== "shared")}
+            disabled={onchain || !isLobby || busy || room.entries.length >= room.maxPlayers || (hasServerUrl && mode !== "shared")}
             onClick={() => void addMarble()}
           >+ JOIN DEMO RACE</button>
-          <p className="fine-print">Demo entry only; this button does not send MON.</p>
+          <p className="fine-print">{onchain
+            ? "Demo entries disabled while verified testnet registration is active."
+            : "Demo entry only; this button does not send MON."}</p>
 
           <div className="wallet-onchain">
             <div className="wallet-onchain-title">MONAD TESTNET · CONTRACT</div>
@@ -155,11 +164,17 @@ export default function App() {
               {chainOverview?.activeRaceId && (
                 <span>Race #{chainOverview.activeRaceId} · {chainOverview.entryCount}/{chainOverview.maxEntries} registered · {chainOverview.feeMON} testnet MON / entry</span>
               )}
-              <small>Wallet connectivity/read-only preview. Real entries and payouts are not yet wired to the race server.</small>
+              <small>{onchain
+                ? "Verified payment entries are enabled. Winner settlement/claim is not automated yet."
+                : "Wallet read-only preview. The server has not enabled blockchain payments."}</small>
             </div>
             {chainMessage && <p className="fine-print">{chainMessage}</p>}
             <button className="outline-button" type="button" onClick={() => void refreshChain()}>REFRESH CHAIN STATUS</button>
           </div>
+          {onchain && (
+            <PaidEntryControls room={room} walletAddress={walletAddress} nickname={nickname}
+              design={designIndex} verify={verify} connected={mode === "shared"} />
+          )}
 
           <div className="divider" />
           <div className="small-title">RECENT ENTRIES <span>{room.entries.length}/{room.maxPlayers}</span></div>
@@ -171,7 +186,7 @@ export default function App() {
                 <div className="roster-item" key={entry.id}>
                   <span className="mini-marble" style={{ background: DESIGNS[entry.design]?.color || "#b58aff" }} />
                   <span>{entry.nickname}</span>
-                  <small>DEMO</small>
+                  <small>{entry.source === "chain" ? "TESTNET" : "DEMO"}</small>
                 </div>
               ))
             )}
@@ -188,7 +203,10 @@ export default function App() {
           </div>
           <div className="arena-heading">
             <span className="stage-label">{room.phase === "finished" ? "THE RACE HAS FINISHED" : room.phase === "racing" ? "THE RACE IS ON" : room.phase === "countdown" ? "GET READY TO DROP" : "THE WAITING BOWL"}</span>
-            <span className="round-label">ROUND #{String(room.roundId).padStart(3, "0")} · SESSION {room.sessionId?.slice(0, 8).toUpperCase() || "OFFLINE"}</span>
+            <span className="round-label">{onchain
+              ? "CHAIN #" + (room.blockchain?.chainRaceId || "—")
+              : "ROUND #" + String(room.roundId).padStart(3, "0")}
+              {" · SESSION "}{room.sessionId?.slice(0, 8).toUpperCase() || "OFFLINE"}</span>
           </div>
 
           {room.phase === "countdown" && (
@@ -242,13 +260,15 @@ export default function App() {
           <h2>Make it <em>happen.</em></h2>
           <div className="numbers">
             <div><small>MARBLES</small><strong>{room.entries.length}</strong></div>
-            <div><small>DEMO POOL</small><strong>{pool} <span>MON*</span></strong></div>
+            <div><small>{onchain ? "ON-CHAIN POOL" : "DEMO POOL"}</small><strong>{pool} <span>MON*</span></strong></div>
           </div>
           <div className="state-row">
             <span>STATUS</span>
-            <strong>{room.phase === "lobby" ? "OPEN FOR ENTRIES" : room.phase === "countdown" ? "STARTING" : room.phase === "finished" ? "FINISHED" : "RACING"}</strong>
+            <strong>{room.phase === "lobby" ? "OPEN FOR ENTRIES" : room.phase === "countdown" ? "STARTING" : room.phase === "finished" ? "FINISHED" : room.phase === "interrupted" ? "RECOVERY LOCKED" : room.phase === "waiting" ? "AWAITING ON-CHAIN RACE" : "RACING"}</strong>
           </div>
-          <p className="fine-print">*Illustrative testnet pool. No actual MON is deposited.</p>
+          <p className="fine-print">{onchain
+            ? "*Actual testnet MON escrow. Winner payout requires on-chain finalization; cancel/refund if interrupted."
+            : "*Illustrative testnet pool. No actual MON is deposited."}</p>
 
           <label htmlFor="pin">OPERATOR PIN</label>
           <input
@@ -261,19 +281,21 @@ export default function App() {
           />
           <button
             className="secondary-button"
-            disabled={!isLobby || busy || room.entries.length >= room.maxPlayers || (hasServerUrl && mode !== "shared")}
+            disabled={onchain || !isLobby || busy || room.entries.length >= room.maxPlayers || (hasServerUrl && mode !== "shared")}
             onClick={() => void operate(() => fill(operatorPin, 8), "Eight demo marbles requested.")}
           >+ ADD 8 DEMO MARBLES</button>
           <button
             className="primary-button"
-            disabled={!isLobby || busy || room.entries.length < 2 || mode !== "shared"}
+            disabled={onchain || !isLobby || busy || room.entries.length < 2 || mode !== "shared"}
             onClick={() => void operate(() => start(operatorPin), "Race countdown started!")}
           >▶ START RACE</button>
           <button
             className="outline-button"
-            disabled={busy || (hasServerUrl && mode !== "shared")}
+            disabled={onchain || busy || (hasServerUrl && mode !== "shared")}
             onClick={() => void operate(() => reset(operatorPin), "Lobby reset. Ready for the next round.")}
           >↻ RESET LOBBY</button>
+          {onchain && <PaidOperatorControls room={room} walletAddress={walletAddress} operatorPin={operatorPin}
+            start={start} connected={mode === "shared"} />}
           {notice && <p className="notice" role="status">{notice}</p>}
 
           <div className="divider" />
@@ -286,14 +308,16 @@ export default function App() {
                 : "No race-server URL is configured. This is a local-only demo."}
           </p>
           <p className="muted explanation">
-            All browsers use the same authoritative race result. Wallet connectivity is a preview; the existing Join Demo Race action is still simulated.
+            {onchain
+              ? "Only confirmed on-chain entrants get marbles. Manual 10-second countdown remains unchanged. Settlement is not automated yet."
+              : "All browsers use the same authoritative race result. Demo entries are simulated."}
           </p>
         </aside>
       </div>
 
       <footer className="footer">
         <span>MONAD MARBLES / HACKATHON PROTOTYPE</span>
-        <span>TESTNET INTEGRATION COMING NEXT · NO REAL PRIZES</span>
+        <span>{onchain ? "TESTNET MON ENTRIES · PAYOUTS REQUIRE SETTLEMENT" : "DEMO MODE · NO PAYMENT REQUIRED"}</span>
       </footer>
     </div>
   );
