@@ -6,8 +6,15 @@ const { randomUUID } = require("crypto");
 const { Server } = require("socket.io");
 const { RaceEngine } = require("./physics");
 const { createVerifier, readChainConfig } = require("./chain-verifier");
+const { ChainAdmission } = require("./chain-admission");
 const chainConfig = readChainConfig();
 const chainVerifier = chainConfig ? createVerifier(chainConfig) : null;
+// A contract address alone only enables read-only status. Paid mode must be
+// enabled explicitly in a separate test environment.
+const paidMode = process.env.MONAD_ENTRY_MODE === "onchain";
+if (paidMode && !chainVerifier) {
+  throw new Error("MONAD_ENTRY_MODE=onchain requires MONAD_CONTRACT_ADDRESS.");
+}
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -18,10 +25,11 @@ const io = new Server(httpServer, {
   cors: { origin: allowedOrigins.length ? allowedOrigins : "*", methods: ["GET", "POST"] },
 });
 
-const maxPlayers = Math.max(2, Math.min(120, Number(process.env.MAX_PLAYERS) || 48));
+const maxPlayers = paidMode ? 48 : Math.max(2, Math.min(120, Number(process.env.MAX_PLAYERS) || 48));
 const designs = ["violet", "tangerine", "aqua", "rose", "lime", "gold", "blue", "mint"];
 const demoEntryFee = 0.1;
 const operatorPin = process.env.OPERATOR_PIN || "";
+if (paidMode && !operatorPin) throw new Error("On-chain entry mode requires OPERATOR_PIN.");
 const serverSessionId = randomUUID();
 const isAutomatedTest = process.env.NODE_ENV === "test";
 const countdownMs = isAutomatedTest ? 80 : 10000; // Manual start; ten-second shared countdown
@@ -31,7 +39,8 @@ const frameEveryTicks = 5; // 60 Hz physics, ~12 Hz snapshots
 let room = {
   roundId: 1,
   raceId: randomUUID(),
-  phase: "lobby",
+  chainRaceId: null,
+  phase: paidMode ? "waiting" : "lobby",
   startsAt: null,
   entries: [],
   winnerId: null,
@@ -41,6 +50,41 @@ let countdownTimer = null;
 let physicsTimer = null;
 let engine = null;
 let lastRaceFrame = null;
+const chainAdmission = paidMode ? new ChainAdmission({
+  verifier: chainVerifier,
+  onChange: (chainState, paidEntries) => {
+    const newRace = room.chainRaceId !== chainState.chainRaceId;
+    if (newRace) {
+      stopTimers();
+      room = {
+        roundId: room.roundId + 1,
+        raceId: randomUUID(),
+        chainRaceId: chainState.chainRaceId,
+        phase: chainState.chainRaceId ? "lobby" : "waiting",
+        startsAt: null,
+        entries: [],
+        winnerId: null,
+        finishOrder: [],
+      };
+    }
+
+    // Only canonical on-chain events can populate the paid roster.
+    // Never let a failed RPC response create unconfirmed entries.
+    room.entries = paidEntries;
+    if (room.phase === "lobby" || room.phase === "waiting") {
+      if (chainState.status === "interrupted") room.phase = "interrupted";
+      else if (chainState.status === "waiting") room.phase = "waiting";
+      else if (chainState.status === "open" || chainState.status === "closed") room.phase = "lobby";
+    }
+    if (chainState.status === "waiting" &&
+        (room.phase === "countdown" || room.phase === "racing")) {
+      stopTimers();
+      room.phase = "interrupted";
+      room.startsAt = null;
+    }
+    broadcast();
+  },
+}) : null;
 
 function snapshot() {
   return {
@@ -48,7 +92,8 @@ function snapshot() {
     sessionId: serverSessionId,
     maxPlayers,
     demoEntryFee,
-    demoOnly: true,
+    demoOnly: !paidMode,
+    blockchain: chainAdmission ? chainAdmission.snapshot : null,
     authoritativePhysics: true,
     serverTime: Date.now(),
   };
@@ -116,6 +161,17 @@ function finishRace() {
 async function beginRace(roundId) {
   if (room.roundId !== roundId || room.phase !== "countdown") return;
   try {
+    if (paidMode) {
+      await chainAdmission.refresh();
+      if (!chainAdmission.canStart || chainAdmission.snapshot.chainRaceId !== room.chainRaceId) {
+        stopTimers();
+        room.phase = "interrupted";
+        room.startsAt = null;
+        broadcast();
+        io.emit("race:error", "On-chain state changed during countdown. The race is locked pending reconciliation or refund.");
+        return;
+      }
+    }
     const race = await RaceEngine.create([...room.entries]);
     if (room.roundId !== roundId || room.phase !== "countdown") {
       race.dispose();
@@ -150,7 +206,7 @@ async function beginRace(roundId) {
 }
 
 app.get("/", (_req, res) => {
-  res.json({ service: "monad-marbles-race-server", status: "online", beta: 3, demoOnly: true });
+  res.json({ service: "monad-marbles-race-server", status: "online", beta: 4, demoOnly: !paidMode });
 });
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "monad-marbles-race-server", authoritativePhysics: true, sessionId: serverSessionId });
@@ -172,10 +228,13 @@ app.get("/chain/status", async (_req, res) => {
     const activeRace = await chainVerifier.activeRace();
     return res.json({
       enabled: true,
-      status: "read-only",
+      status: paidMode ? "admission-enabled" : "read-only",
       network,
       activeRace,
-      message: "Registration admission is not enabled yet. Do not send entry payments through this server.",
+      admission: chainAdmission ? chainAdmission.snapshot : null,
+      message: paidMode
+        ? "Confirmed entry events determine marble admission; on-chain race closing is required before starting."
+        : "Registration admission is not enabled. Do not send entry payments through this server.",
     });
   } catch (error) {
     console.error("Monad read-only readiness failed:", error);
@@ -204,6 +263,7 @@ io.on("connection", (socket) => {
 
   let lastJoin = 0;
   socket.on("lobby:join", (payload, ack) => {
+    if (paidMode) return reply(ack, false, "Paid mode: submit a confirmed on-chain entry and signed nickname instead.");
     if (room.phase !== "lobby") return reply(ack, false, "Entries are closed.");
     if (room.entries.length >= maxPlayers) return reply(ack, false, "The bowl is full.");
 
@@ -223,6 +283,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("lobby:fill", (payload, ack) => {
+    if (paidMode) return reply(ack, false, "Demo marbles are disabled for on-chain races.");
     if (!isOperator(payload)) return reply(ack, false, "Incorrect operator PIN.");
     if (room.phase !== "lobby") return reply(ack, false, "Entries are closed.");
     const count = Math.max(1, Math.min(12, Number(payload?.count) || 8));
@@ -234,10 +295,39 @@ io.on("connection", (socket) => {
     broadcast();
   });
 
-  socket.on("lobby:start", (payload, ack) => {
+  // Paid entries must be independently validated. Sending a fabricated
+  // transaction hash or wallet address cannot create a marble.
+  socket.on("lobby:verify", async (payload, ack) => {
+    if (!paidMode) return reply(ack, false, "On-chain admissions are disabled.");
+    if (room.phase !== "lobby") return reply(ack, false, "This round is no longer admitting entries.");
+    try {
+      const entry = await chainAdmission.attachNickname({
+        raceId: payload?.raceId,
+        txHash: payload?.txHash,
+        nickname: payload?.nickname,
+        signature: payload?.signature,
+      });
+      if (typeof ack === "function") ack({ ok: true, entry });
+    } catch (error) {
+      reply(ack, false, error instanceof Error ? error.message : "Could not verify registration.");
+    }
+  });
+
+  socket.on("lobby:start", async (payload, ack) => {
     if (!isOperator(payload)) return reply(ack, false, "Incorrect operator PIN.");
     if (room.phase !== "lobby") return reply(ack, false, "Race is already started.");
     if (room.entries.length < 2) return reply(ack, false, "Add at least two marbles.");
+    if (paidMode) {
+      try {
+        await chainAdmission.refresh();
+        if (!chainAdmission.canStart ||
+            chainAdmission.snapshot.chainRaceId !== room.chainRaceId) {
+          return reply(ack, false, "On-chain registration must be closed, fully synchronized, and confirmed before starting.");
+        }
+      } catch (error) {
+        return reply(ack, false, "Cannot start while Monad Testnet verification is unavailable.");
+      }
+    }
     room.phase = "countdown";
     room.startsAt = Date.now() + countdownMs;
     const roundId = room.roundId;
@@ -247,11 +337,13 @@ io.on("connection", (socket) => {
   });
 
   socket.on("lobby:reset", (payload, ack) => {
+    if (paidMode) return reply(ack, false, "Paid races cannot be reset off-chain; cancel/finalize on the contract.");
     if (!isOperator(payload)) return reply(ack, false, "Incorrect operator PIN.");
     stopTimers();
     room = {
       roundId: room.roundId + 1,
       raceId: randomUUID(),
+      chainRaceId: null,
       phase: "lobby",
       startsAt: null,
       entries: [],
@@ -270,5 +362,14 @@ httpServer.listen(PORT, "0.0.0.0", () => {
   console.log("Monad Marbles authoritative race server on port " + httpServer.address().port + ", session " + serverSessionId);
   if (!operatorPin) {
     console.warn("OPERATOR_PIN not configured: any visitor may control demo races.");
+  }
+  if (chainAdmission) {
+    const sync = () => chainAdmission.refresh().catch(error => {
+      console.error("Paid lobby chain synchronization error:", error.message);
+    });
+    void sync();
+    const interval = setInterval(() => void sync(), 5000);
+    interval.unref();
+    console.log("On-chain admission enabled: demo join/reset/fill disabled and race start requires contract close.");
   }
 });
