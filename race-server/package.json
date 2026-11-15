@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test:v27": "node tests/v27-physics.test.js",
+    "test:v27": "node tests/v27-physics.test.js && node tests/v27-sync.test.js",
     "test": "node tests/physics.test.js && node tests/sync.test.js && node tests/chain-verifier.test.js && node tests/chain-admission.test.js && node tests/auto-settler.test.js"
   },
   "engines": {
