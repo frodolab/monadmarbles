@@ -1,0 +1,31 @@
+name: Foundry contracts
+on:
+  push:
+    branches:
+      - feature/monad-testnet-contracts
+    paths:
+      - "contracts/**"
+      - ".github/workflows/foundry-contracts.yml"
+  pull_request:
+    branches:
+      - beta
+    paths:
+      - "contracts/**"
+      - ".github/workflows/foundry-contracts.yml"
+
+jobs:
+  solidity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Build contract
+        working-directory: contracts
+        run: forge build
+      - name: Run contract tests
+        working-directory: contracts
+        run: forge test -vv
