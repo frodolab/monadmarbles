@@ -119,6 +119,14 @@ async function main() {
     assert.equal(rows[0].raceId, "1");
   });
 
+  await check("confirmed block scanning excludes unsafe latest events", async () => {
+    const v = createVerifier({ publicClient: mockClient({ head: 100n }), deployBlock: 91n, minConfirmations: 2 });
+    assert.equal(await v.confirmedBlock(), 99n);
+    const rows = await v.replayEntries("1");
+    assert.equal(rows.length, 0, "Block 100 must be excluded until it has two confirmations");
+    await assert.rejects(() => v.replayEntries("1", { toBlock: 100n }), /exceeds confirmed/);
+  });
+
   await check("disabled mode never opens testnet entry validation", async () => {
     assert.equal(readChainConfig({}), null);
     assert.equal(readChainConfig({

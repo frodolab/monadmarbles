@@ -140,20 +140,32 @@ function createVerifier({
     };
   }
 
+  // Only confirmed logs may create marbles; fresh txs wait in the UI until
+  // the configured confirmation depth has been reached.
+  async function confirmedBlock() {
+    const head = await client.getBlockNumber();
+    const depth = BigInt(minConfirmations - 1);
+    return head >= depth ? head - depth : null;
+  }
+
   // This operation is designed to run when onboarding/recovering a race.
   // A failed/partial replay MUST keep a paid lobby locked, never grant fewer
   // marbles than on-chain entrants or silently drop entrants during restarts.
-  async function replayEntries(raceId, { chunkSize = 2000n } = {}) {
+  async function replayEntries(raceId, { chunkSize = 2000n, fromBlock = deploymentBlock, toBlock } = {}) {
     const id = validateRaceId(raceId);
     const step = BigInt(chunkSize);
     if (step < 1n || step > 5000n) fail("Replay chunk size must be 1–5000 blocks.");
     await assertNetwork();
-    const head = await client.getBlockNumber();
+    const safeHead = await confirmedBlock();
+    const stopAt = toBlock === undefined ? safeHead : BigInt(toBlock);
+    const startAt = BigInt(fromBlock);
+    if (safeHead === null || stopAt > safeHead) fail("Replay target exceeds confirmed chain head.");
+    if (startAt < deploymentBlock) fail("Replay cannot begin before the contract deployment.");
     const byEntryId = new Map();
-    if (head < deploymentBlock) return [];
+    if (startAt > stopAt) return [];
 
-    for (let from = deploymentBlock; from <= head; from += step) {
-      const to = from + step - 1n > head ? head : from + step - 1n;
+    for (let from = startAt; from <= stopAt; from += step) {
+      const to = from + step - 1n > stopAt ? stopAt : from + step - 1n;
       const logs = await client.getLogs({
         address: normalizedAddress,
         event: PLAYER_JOINED,
@@ -265,7 +277,7 @@ function createVerifier({
 
   return {
     address: normalizedAddress, deploymentBlock,
-    assertNetwork, activeRace, verifyRegistration, replayEntries,
+    assertNetwork, activeRace, confirmedBlock, verifyRegistration, replayEntries,
   };
 }
 
