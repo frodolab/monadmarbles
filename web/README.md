@@ -69,3 +69,30 @@ advertised as paid entry registration.** Demo entries still use Socket.IO.
 
 Before sending any testnet MON to the contract, we must finish independent
 backend event verification and safe on-chain/off-chain race-ID coordination.
+
+## Local end-to-end testnet registration test
+
+Use the on-chain backend setup described in `race-server/README.md` and
+visit `http://localhost:5173`. The frontend switches modes based on the
+actual Socket.IO `room.blockchain.mode`, not merely the presence of an
+environment variable or wallet.
+
+With the server in on-chain mode:
+
+1. Connect the deployed contract owner's MetaMask wallet.
+2. Click **Create Testnet Race** (first race ID will be 1).
+3. Enter a nickname, choose a marble, and click **Pay 0.1 Testnet MON**.
+4. MetaMask signs a transaction, then a nickname-authorization message.
+5. The verified event creates a marble; use a different wallet for marble #2.
+6. Enter the private operator PIN, then manually press **Close & Start**.
+7. The contract is closed before the shared 10-second countdown begins.
+8. Observe one official winner across devices.
+9. Because settlement is not automated yet, the owner can cancel this
+   closed testnet race, and each wallet can click **Claim Refund**.
+
+A submitted registration transaction is saved in browser localStorage.
+If the signature or verification step fails, use **Retry Verification**;
+do NOT pay a second time.
+
+No testnet entries are possible on the demo-mode production `beta` server,
+which has `MONAD_ENTRY_MODE` unset.
