@@ -56,6 +56,11 @@ let countdownTimer = null;
 let physicsTimer = null;
 let engine = null;
 let lastRaceFrame = null;
+let closeInProgress = false;
+let closeTxHash = null;
+let closeStatus = "idle";
+let invalidPins = 0;
+let invalidPinWindowStart = Date.now();
 // Disabled on the V1 production/staging contract. Enabling requires a separate
 // V2 address, owner-authorized low-value relayer, and Railway volume.
 const autoSettler = autoPayoutEnabled ? createAutoSettler({
@@ -77,6 +82,8 @@ const chainAdmission = paidMode ? new ChainAdmission({
       chainState.chainRaceId === null);
     if (newRace && !preserveFinished) {
       stopTimers();
+      closeStatus = "idle";
+      closeTxHash = null;
       room = {
         roundId: room.roundId + 1,
         raceId: randomUUID(),
@@ -117,6 +124,7 @@ function snapshot() {
     demoOnly: !paidMode,
     blockchain: chainAdmission ? chainAdmission.snapshot : null,
     payout: room.payout || null,
+    raceClose: paidMode ? { status: closeStatus, txHash: closeTxHash } : null,
     authoritativePhysics: true,
     serverTime: Date.now(),
   };
@@ -135,7 +143,14 @@ function reply(ack, ok, error) {
 }
 
 function isOperator(payload) {
-  return !operatorPin || (typeof payload?.pin === "string" && payload.pin === operatorPin);
+  if (!operatorPin) return true;
+  const now = Date.now();
+  if (now - invalidPinWindowStart > 60000) { invalidPins = 0; invalidPinWindowStart = now; }
+  if (invalidPins >= 10) return false;
+  const valid = typeof payload?.pin === "string" && payload.pin === operatorPin;
+  if (!valid) invalidPins++;
+  else invalidPins = 0;
+  return valid;
 }
 
 function addEntry(nickname, design) {
@@ -365,34 +380,54 @@ io.on("connection", (socket) => {
   });
 
   socket.on("lobby:start", async (payload, ack) => {
-    if (!isOperator(payload)) return reply(ack, false, "Incorrect operator PIN.");
-    if (room.phase !== "lobby") return reply(ack, false, "Race is already started.");
-    if (room.entries.length < 2) return reply(ack, false, "Add at least two marbles.");
-    if (paidMode) {
-      try {
-        await chainAdmission.refresh();
-        if (!chainAdmission.canStart ||
-            chainAdmission.snapshot.chainRaceId !== room.chainRaceId) {
-          return reply(ack, false, "On-chain registration must be closed, fully synchronized, and confirmed before starting.");
-        }
-      } catch (error) {
-        return reply(ack, false, "Cannot start while Monad Testnet verification is unavailable.");
-      }
-    }
-    if (autoSettler) {
-      try {
-        await autoSettler.assertReady();
-      } catch (error) {
-        console.error("Cannot start paid auto-payout race:", error.message);
-        return reply(ack, false, "Automatic payout is not ready. Check the authorized settler, RPC, and gas balance.");
-      }
-    }
-    room.phase = "countdown";
-    room.startsAt = Date.now() + countdownMs;
+    if (!isOperator(payload)) return reply(ack, false, "Incorrect operator PIN or too many attempts.");
+    if (room.phase !== "lobby" || closeInProgress) return reply(ack, false, "Race is already starting.");
+    if (room.entries.length < 2) return reply(ack, false, "Add at least two confirmed marbles.");
+    // A single in-process lock prevents duplicate RPC submissions from two
+    // spectators clicking Start simultaneously.
+    closeInProgress = true;
+    const raceId = room.chainRaceId;
     const roundId = room.roundId;
-    reply(ack, true);
-    broadcast();
-    countdownTimer = setTimeout(() => void beginRace(roundId), countdownMs);
+    try {
+      if (paidMode) {
+        if (!autoSettler) throw new Error("PIN-only blockchain start requires the authorized V2 settler.");
+        await autoSettler.assertReady();
+        await chainAdmission.refresh();
+        if (room.phase !== "lobby" || room.roundId !== roundId || room.chainRaceId !== raceId)
+          throw new Error("Race changed while verifying the participant roster.");
+        const chainState = chainAdmission.snapshot;
+        if (!chainState.synced || chainState.chainRaceId !== raceId || room.entries.length < 2)
+          throw new Error("On-chain registration is not fully synchronized.");
+        if (chainState.status === "open") {
+          closeStatus = "submitting";
+          broadcast();
+          const txHash = await autoSettler.closeEntries(raceId);
+          closeTxHash = txHash;
+          closeStatus = "confirmed";
+          broadcast();
+        } else if (chainState.status !== "closed") {
+          throw new Error("On-chain race must be Open or safely Closed before starting.");
+        }
+        // The authoritative admission system must have observed the race Open
+        // before Closed; never resume a closed race after an unknown restart.
+        await chainAdmission.refresh();
+        if (room.phase !== "lobby" || room.roundId !== roundId || room.chainRaceId !== raceId ||
+            !chainAdmission.canStart || chainAdmission.snapshot.chainRaceId !== raceId)
+          throw new Error("On-chain race is not confirmed closed and fully synchronized.");
+      }
+      room.phase = "countdown";
+      room.startsAt = Date.now() + countdownMs;
+      reply(ack, true);
+      broadcast();
+      countdownTimer = setTimeout(() => void beginRace(roundId), countdownMs);
+    } catch (error) {
+      console.error("Race start rejected:", error);
+      closeStatus = "error";
+      broadcast();
+      reply(ack, false, error instanceof Error ? error.message : "On-chain race close failed.");
+    } finally {
+      closeInProgress = false;
+    }
   });
 
   socket.on("lobby:reset", (payload, ack) => {
