@@ -114,8 +114,9 @@ contract MonadMarblesAutoTest {
         vm.prank(BOB);
         game.joinRace{value: FEE}(raceId, 1);
         game.closeEntries(raceId);
+        uint256 rejectingId = game.entryIdOf(raceId, address(rejecting));
         vm.expectRevert(MonadMarblesAuto.PayoutFailed.selector);
-        game.finalizeRace(raceId, game.entryIdOf(raceId, address(rejecting)));
+        game.finalizeRace(raceId, rejectingId);
         require(game.getRace(raceId).status == MonadMarblesAuto.RaceStatus.Closed, "settlement must roll back");
         require(game.getRace(raceId).prizePool == 2 * FEE, "money must stay escrowed");
         require(game.activeRaceId() == raceId, "race must remain active");
