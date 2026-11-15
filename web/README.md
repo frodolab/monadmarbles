@@ -96,3 +96,15 @@ do NOT pay a second time.
 
 No testnet entries are possible on the demo-mode production `beta` server,
 which has `MONAD_ENTRY_MODE` unset.
+
+## Beta 4C: No payout clicks required
+
+The V2 `MonadMarblesAuto` contract automatically transfers the entire
+native-testnet-MON prize pool when the trusted server signs
+`finalizeRace` at the finish line. The website shows the payout transaction
+and confirmation, not Finalize Winner / Claim Winnings buttons. No MetaMask
+interaction is required of the winning player after entry.
+
+**Do not switch the live testnet URL to this code until a NEW V2 contract,
+authorized relayer and durable Railway backend volume are configured and
+tested.** The existing V1 testnet service remains unaffected by this branch.

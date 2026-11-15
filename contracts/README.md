@@ -164,3 +164,103 @@ cast call $contract "nextRaceId()(uint256)" --rpc-url $rpc
 Expected freshly deployed state: owner matches the deployer, active race ID is
 zero, and next race ID is one. **Do not create a paid-entry race until backend
 verification and race state recovery are ready.**
+
+## Beta 4C: Automatic full-pool payout (new contract)
+
+The legacy `MonadMarbles.sol` contract (deployed at
+`0x9fB46e07dFcEad9B51799aD4B5A5b8a2c254c55B`) **cannot** be changed.
+It uses `finalizeRace` followed by the winner's separate `claimPrize` call.
+
+The new **`MonadMarblesAuto.sol` / `MonadMarblesAuto`** requires its own
+deployment. It retains the same entry event and race identifiers, but a
+successful `finalizeRace(raceId, winningEntryId)` now **atomically transfers
+100% of the pool to that entry's wallet**. If the receiver rejects payment,
+the entire settlement transaction reverts, and the race remains Closed
+(cancel/refund is still available). An attempt to finalize twice fails.
+
+The contract has a public `AUTO_PAYOUT() == true` marker that the server
+checks before allowing any automatically settled race to start. There are no
+Finalize Winner or Claim Winnings buttons. The server submits settlement
+with a *dedicated, low-value, authorized testnet relayer* automatically when
+the authoritative physics finishes. The 10-second countdown remains **manual**
+and registration must still be explicitly closed first.
+
+This contract is trusted-oracle escrow, **not** on-chain-verified physics, and
+is not audited or intended for real-value/regulated gaming.
+
+### Owner: deploy the V2 testnet contract from Windows PowerShell
+
+Use your existing Foundry keystore `monad-marbles-deployer`. This transaction
+requires your local keystore password but never exposes private keys in chat.
+
+```powershell
+cd C:\MonadMarbles\monadmarbles
+git fetch origin
+git switch feature/monad-auto-payout
+git pull origin feature/monad-auto-payout
+cd contracts
+
+forge test -vv
+$rpc = "https://testnet-rpc.monad.xyz"
+cast chain-id --rpc-url $rpc
+# Must print 10143.
+forge create src/MonadMarblesAuto.sol:MonadMarblesAuto `
+  --rpc-url $rpc `
+  --account monad-marbles-deployer `
+  --broadcast
+```
+
+Record the new public `Deployed to:` address, deployment transaction hash
+and deployment block number. **Do not send private keys, seed phrases, or
+keystore passwords to ChatGPT, GitHub or collaborators.**
+
+### Owner: authorize a new dedicated server relayer
+
+Create a **separate testnet-only wallet** (a new MetaMask account works).
+Privately export its key directly into Railway's protected
+`MONAD_SETTLER_PRIVATE_KEY` service variable—not into chat, GitHub or frontend
+build variables. Fund that relayer with approximately 0.05–0.1 testnet MON for
+gas. Register its PUBLIC wallet address on the V2 contract:
+
+```powershell
+$newContract = "0xPASTE_YOUR_NEW_CONTRACT_ADDRESS"
+$relayerAddress = "0xPASTE_PUBLIC_RELAYER_ADDRESS"
+cast send $newContract "setSettler(address)" $relayerAddress `
+  --rpc-url $rpc `
+  --account monad-marbles-deployer
+
+cast call $newContract "settler()(address)" --rpc-url $rpc
+cast call $newContract "AUTO_PAYOUT()(bool)" --rpc-url $rpc
+```
+
+Expected: the relayer address, then `true`.
+
+### Railway backend cutover (after V2 is deployed)
+
+Use a **dedicated Railway volume** mounted at `/data` on the testnet
+race-server (one replica). Only after mounting the volume, authorizing the
+relayer and funding it, update the testnet backend variables:
+
+```env
+MONAD_ENTRY_MODE=onchain
+MONAD_AUTOPAYOUT_ENABLED=true
+MONAD_CONTRACT_ADDRESS=0x<NEW_V2_ADDRESS>
+MONAD_DEPLOY_BLOCK=<NEW_V2_DEPLOYMENT_BLOCK>
+MONAD_SETTLEMENT_DIR=/data
+MONAD_SETTLER_PRIVATE_KEY=<PRIVATE_VALUE_SET_IN_RAILWAY_DASHBOARD_ONLY>
+MONAD_RPC_URL=https://testnet-rpc.monad.xyz
+MONAD_MIN_CONFIRMATIONS=2
+```
+
+Update the frontend's `VITE_MONAD_MARBLES_ADDRESS` to the same NEW V2 address.
+Deploy the new `feature/monad-auto-payout` branch to **both** testnet
+services only. Keep `beta` and the old V1 deployment intact.
+
+The backend blocks the manual Start action if the relayer is missing,
+unauthorized, underfunded, the network is wrong, or the contract marker is
+not V2. It writes the winning result to the durable volume *before* reporting
+the winner, then sends `finalizeRace`. After a restart, it checks the
+on-chain paid status, resumes pending journal records, and never invents a
+missing physics outcome. If a restart loses a running race before a winner
+was saved, cancel/refund rather than guessing a winner. No payout claim button
+is needed at any point.
