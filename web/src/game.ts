@@ -61,6 +61,7 @@ export interface RoomState {
   chainRaceId?: string | null;
   blockchain?: ChainStatus | null;
   payout?: PayoutStatus | null;
+  raceClose?: { status: "idle" | "submitting" | "confirmed" | "error"; txHash: string | null } | null;
   authoritativePhysics?: boolean;
   winnerId?: string | null;
   finishOrder?: string[];
