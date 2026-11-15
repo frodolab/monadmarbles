@@ -1,50 +1,57 @@
-# Monad Marbles — Beta 2
+# Monad Marbles — Beta 3 (authoritative spectator race)
 
-A shared **demo** marble-registration lobby and local 3D physics preview.
+The shared demo lobby and server-authoritative physics race now run on Railway.
 
-- Players select a nickname and marble color, then add a **simulated** entry.
-- Marble models drop into a transparent 3D bowl.
-- With the race server connected, all browsers see the same participant list, shared operator start, and countdown.
-- Operator can add eight demo marbles, manually start, and reset rounds.
-- Race physics is still **local to each browser**. Results are not authoritative and there is no smart contract integration, entry payment, or prize payout yet.
-- No real or testnet cryptocurrency is accepted by this beta; the displayed pool is illustrative.
+**Important:** This is still a **mock-entry demo** with no real or testnet blockchain transactions, no prize payouts, and no fairness audit. All displayed MON pool numbers are illustrative.
 
-## Run locally (two terminals)
+## Features
 
-```sh
+- Choose nickname and marble design; see joined marbles drop into the shared 3D bowl
+- Add eight simulated players, manually start a 3.5-second countdown, or reset the round
+- One Node.js + Rapier 3D physics simulation runs on the Railway race server
+- Server broadcasts snapshots about 12 times per second; browsers interpolate for smooth playback
+- The first marble to cross the finish plane is determined **only on the server**
+- Live server-ranked top-ten leaderboard and automatic camera following the top twelve
+- Late spectators get the current lobby, latest race snapshot, and completed winner
+- All participants use the same official winner; a local browser cannot choose the winner
+
+## Local development
+
+From repo root, use **two terminals**:
+
+```powershell
 cd race-server
-npm install
-npm start
+npm.cmd install
+npm.cmd test
+npm.cmd start
 ```
 
-```sh
+```powershell
 cd web
-npm install
-npm run dev
+npm.cmd install
+npm.cmd run dev
 ```
 
-On Windows PowerShell use `npm.cmd` instead of `npm` if execution-policy restrictions block `npm.ps1`. Vite defaults to `http://localhost:3001` for the shared server during development. If it's not running, the UI falls back to clearly labeled local-only demo mode.
+Windows PowerShell can require `npm.cmd` instead of `npm`. The Vite frontend defaults to `http://localhost:3001` in development.
 
-Build check:
+## Railway (two services)
 
-```sh
-cd web
-npm run build
-```
+From the `beta` branch:
 
-## Railway deployment (two services, same GitHub beta branch)
+- `marbles-web` or `monadmarbles`: root `/web`, build `npm run build`, start `npm run start`
+- `race-server`: root `/race-server`, start `npm start`, one replica, no auto-sleep, healthcheck `/health`
+- Race server `WEB_ORIGIN=https://monadmarbles-production.up.railway.app`
+- Race server `OPERATOR_PIN`: a private PIN chosen by the operator, **never** published in `VITE_*` env variables or Git
+- Frontend `VITE_RACE_SERVER_URL=https://race-server-production-dd79dfa2.up.railway.app` (requires frontend rebuild to take effect)
 
-1. Existing **frontend**: root `/web`, build `npm run build`, start `npm run start`.
-2. New **race-server**: root `/race-server`, start `npm start`, one replica, disable Serverless/App Sleeping, and generate a public domain.
-3. On the **race-server**, set `WEB_ORIGIN=https://monadmarbles-production.up.railway.app` and `OPERATOR_PIN` to a **private** PIN.
-4. On the **frontend**, set `VITE_RACE_SERVER_URL=https://YOUR-RACE-SERVER.up.railway.app`. Apply/redeploy: Vite reads this at build time.
-5. Test the link from two devices. The top-right indicator should say **SHARED LOBBY LIVE**.
-6. Operator enters the private PIN in the frontend controls; never expose the PIN as a frontend environment variable.
+Test from two browsers: top-right should say **LIVE · SHARED PHYSICS**. Add a racer in one browser and see them in both. Start one round and compare the same final winner on both screens.
 
-The service stores demo state only in memory. A redeploy/restart resets the lobby; a multi-replica setup would create conflicting rooms. This is a hackathon prototype, not secure entry processing or prize settlement.
+## Known limitations
 
-The frontend uses Vite preview to serve the demo build. For longer-term production, use a dedicated static hosting server.
+- All participation is simulated and repeatable; no on-chain entry or prize transfers yet.
+- In-memory server state resets during deployment or container restarts. Do not deploy while a race is active.
+- One server replica only. Horizontal scale requires shared state and distributed coordination.
+- A server-controlled winner is consistent, but not independently trustless/verifiable.
+- Frame update rate is a starting configuration. Performance with 48 marbles should be load-tested.
 
-## Next: Beta 3
-
-Move physics into one authoritative server, stream identical marble trajectories to all spectators, and verify an agreed first-place result.
+Next: Monad testnet contract-entry integration and verifiable race inputs/results.

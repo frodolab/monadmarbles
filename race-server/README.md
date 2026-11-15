@@ -1,32 +1,37 @@
-# Monad Marbles — Shared Lobby (Beta 2)
+# Monad Marbles — Beta 3 race server
 
-This Node.js service coordinates **demo** registrations, a shared lobby, manual race start, and a 3.5-second countdown using Socket.IO.
+Node.js + Socket.IO + Rapier 3D (WebAssembly). This service is the single official authority for the race result.
 
-**No wallets, smart contracts, actual MON, on-chain results, or authoritative server physics are connected in this beta.** All entries and the displayed pool are simulated.
-
-## Local run
+## Local
 
 ```sh
-cd race-server
 npm install
+npm test
 npm start
 ```
 
-Open http://localhost:3001/health to verify the service. The web app connects to http://localhost:3001 by default in local Vite development.
+`/health` reports readiness. Socket.IO coordinates `lobby:state`, `race:snapshot`, and `race:result`.
 
-## Railway deployment
+## Race flow
 
-Create a **second Railway service** sourced from the same `beta` branch.
+1. Clients join with simulated entries; server validates phase and capacity.
+2. Operator (protected by `OPERATOR_PIN`) starts round; entry closes.
+3. After 3.5 seconds, server creates its own fixed-step Rapier world (60 Hz).
+4. Server publishes marble positions/rotations/progress approximately 12 times per second.
+5. Server chooses the **first** marble crossing the finish plane; a same-tick tie is broken by ID.
+6. Client browsers receive the official result and continue rendering that final state.
 
-- Root directory: `/race-server`
-- Build command: automatic / `npm install` (if manual build configuration is required)
-- Start command: `npm start`
-- Minimum and maximum replicas: 1
-- Disable Serverless/App Sleeping
-- Generate a public HTTPS domain
-- Environment variable `WEB_ORIGIN=https://monadmarbles-production.up.railway.app` (append `,http://localhost:5173` to allow local frontend development)
-- Set `OPERATOR_PIN` to a secret value, and enter that value in the web operator controls; never put it in `VITE_` variables.
+A fresh client joining mid-race receives the latest snapshot and participant list. The physics engine never runs in a spectator's browser during the official race.
 
-In the **frontend** Railway service set `VITE_RACE_SERVER_URL=https://<your-race-server>.up.railway.app`, then redeploy. This is a Vite **build-time** variable.
+## Railway
 
-State is held in RAM and resets on service restart. The shared *lobby* is synchronized; the Beta 2 3D *race* is still a local visual preview rendered separately on each device. Do not portray its winner as an official on-chain result.
+Use the existing `race-server` service; source branch `beta`, root `/race-server`, start `npm start`, healthcheck `/health`, replicas **1**, auto-sleep **off**. Generate public HTTPS domain for browsers.
+
+Set:
+- `WEB_ORIGIN=https://monadmarbles-production.up.railway.app`
+- `OPERATOR_PIN` as a private value (not committed)
+- `MAX_PLAYERS=48` (or another reasonable demo capacity)
+
+## Safety and prototype scope
+
+No real or testnet MON transfers; displayed fee and pool are simulated. The official result is centrally controlled, not trustlessly provable. Race state is held in RAM and is lost on restart; avoid deploying during live rounds. This is a hackathon demo, not a secure wagering system.
