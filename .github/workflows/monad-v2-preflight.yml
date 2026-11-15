@@ -1,0 +1,64 @@
+name: Monad V2 testnet readiness (public on-chain reads)
+on:
+  push:
+    branches: [feature/monad-auto-payout]
+    paths: [".github/workflows/monad-v2-preflight.yml"]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install read-only RPC dependencies
+        working-directory: race-server
+        run: npm install --omit=dev --no-audit --no-fund
+      - name: Verify Monad V2 deployment, authorized settler and gas reserve
+        run: |
+          node <<'NODE'
+          const assert = require("node:assert/strict");
+          const { createPublicClient, http, parseAbi, formatEther } = require("./race-server/node_modules/viem");
+          const contract = "0xA8149453bbD015a470BcD0FA572EA154AeB6c869";
+          const settler = "0x3061bcd4c2f9cb0cc16fea97b7685701decf490c";
+          const deploymentTx = "0xdeb38c67e7261f8458d87f977014cb764a9a66a11ee905a50be94072dd3138de";
+          const client = createPublicClient({ transport: http("https://testnet-rpc.monad.xyz", {timeout:18000,retryCount:2}) });
+          const abi = parseAbi([
+            "function AUTO_PAYOUT() view returns (bool)",
+            "function owner() view returns (address)",
+            "function settler() view returns (address)",
+            "function activeRaceId() view returns (uint256)",
+          ]);
+          async function run() {
+            const id = await client.getChainId();
+            assert.equal(id, 10143, "Not Monad Testnet");
+            const [receipt, bytecode, authorized, marker, owner, balance, active] = await Promise.all([
+              client.getTransactionReceipt({hash: deploymentTx}),
+              client.getBytecode({address:contract}),
+              client.readContract({address:contract,abi,functionName:"settler"}),
+              client.readContract({address:contract,abi,functionName:"AUTO_PAYOUT"}),
+              client.readContract({address:contract,abi,functionName:"owner"}),
+              client.getBalance({address:settler}),
+              client.readContract({address:contract,abi,functionName:"activeRaceId"}),
+            ]);
+            assert.equal(receipt.status,"success","V2 contract deployment reverted");
+            assert.equal(receipt.contractAddress?.toLowerCase(),contract.toLowerCase(),"Deployment tx is not V2");
+            assert.ok(bytecode && bytecode!=="0x","No V2 bytecode");
+            assert.equal(authorized.toLowerCase(),settler.toLowerCase(),"Configured settlement wallet is not authorized");
+            assert.equal(marker,true,"V2 does not advertise automatic payouts");
+            assert.ok(balance>=10000000000000000n,"Settlement wallet below 0.01 testnet MON required for gas");
+            console.log("RESULT chainId",id);
+            console.log("RESULT contract",contract);
+            console.log("RESULT deploymentBlock",receipt.blockNumber.toString());
+            console.log("RESULT owner",owner);
+            console.log("RESULT authorizedSettler",authorized);
+            console.log("RESULT settlerBalanceMON",formatEther(balance));
+            console.log("RESULT autoPayout",marker);
+            console.log("RESULT activeRaceId",active.toString());
+            console.log("Public on-chain readiness checks PASSED.");
+          }
+          run().catch(error=>{console.error("Readiness check FAILED:", error.message);process.exitCode=1});
+          NODE
