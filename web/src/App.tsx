@@ -6,7 +6,7 @@ import { useLobby } from "./hooks/useLobby";
 import { countdownSeconds } from "./utils/countdown";
 
 export default function App() {
-  const { room, frame, countdownAnchor, mode, hasServerUrl, join, fill, start, reset } = useLobby();
+  const { room, frame, countdownAnchor, mode, hasServerUrl, myEntryId, join, fill, start, reset } = useLobby();
   const [nickname, setNickname] = useState("");
   const [designIndex, setDesignIndex] = useState(0);
   const [operatorPin, setOperatorPin] = useState("");
@@ -64,7 +64,7 @@ export default function App() {
         <div className="brand">
           <div className="brand-logo">M</div>
           <div>
-            <div className="eyebrow">MONAD BLITZ · BETA 3.1 · SYNC FIX</div>
+            <div className="eyebrow">MONAD BLITZ · BETA V1 · MULTIPLAYER</div>
             <h1>MONAD <span>MARBLES</span></h1>
           </div>
         </div>
@@ -124,9 +124,9 @@ export default function App() {
               <div className="empty-roster">The bowl is empty. Add the first marble!</div>
             ) : (
               room.entries.slice(-8).reverse().map((entry) => (
-                <div className="roster-item" key={entry.id}>
+                <div className="roster-item" key={entry.id} style={entry.id === myEntryId ? { outline: "2px solid #f9cc5b", borderRadius: 8, background: "rgba(249,204,91,0.12)" } : undefined}>
                   <span className="mini-marble" style={{ background: DESIGNS[entry.design]?.color || "#b58aff" }} />
-                  <span>{entry.nickname}</span>
+                  <span>{entry.nickname}{entry.id === myEntryId ? " ★ YOU" : ""}</span>
                   <small>DEMO</small>
                 </div>
               ))
@@ -137,7 +137,7 @@ export default function App() {
         <main className="arena">
           <div className="arena-backdrop">
             {showingRace ? (
-              <RaceScene entries={room.entries} roundId={room.roundId} frame={frame} autoFollow={autoFollow} />
+              <RaceScene entries={room.entries} roundId={room.roundId} frame={frame} autoFollow={autoFollow} myEntryId={myEntryId} />
             ) : (
               <BowlScene entries={room.entries} roundId={room.roundId} />
             )}
@@ -178,12 +178,12 @@ export default function App() {
               </button>
               {leaders.length > 0 && (
                 <div className="race-leaders">
-                  <small>LIVE LEADERBOARD · SERVER RANKINGS</small>
+                  <small>LIVE LEADERBOARD · SERVER RANKINGS · GOLD = YOUR MARBLE</small>
                   {leaders.map((marble, index) => (
-                    <div key={marble.id} className="leader-line">
+                    <div key={marble.id} className="leader-line" style={marble.id === myEntryId ? { background: "rgba(249,204,91,0.2)", outline: "2px solid #f9cc5b", borderRadius: 6, color: "#ffe28b" } : undefined}>
                       <span>{index + 1}.</span>
                       <span className="mini-marble" style={{ background: DESIGNS[marble.player?.design ?? 0]?.color }} />
-                      <span>{marble.player?.nickname || "Racer"}</span>
+                      <span>{marble.player?.nickname || "Racer"}{marble.id === myEntryId ? " ★ YOU" : ""}</span>
                       <span>{Math.round(marble.progress * 100)}%</span>
                     </div>
                   ))}
