@@ -105,3 +105,6 @@ body[data-theme="castle"] #scene::before{opacity:.11}
  .panel h2{font-size:14px}.camera-ui{top:315px;max-width:140px}
  .finish{padding:10px 7px}.podium-header>small{font-size:8px}
 }
+
+/* Presentation mode: suppress the FPS/debug bubble; it is not race state. */
+#fps{display:none!important}
