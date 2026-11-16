@@ -395,6 +395,10 @@ function renderLiveControls() {
   // A user must always be able to initiate an identity-only wallet connection
   // even before the contract owner creates a race.
   joinButton.disabled = hasEntry() || waitingToJoin || paid.busy;
+  // A pre-entry nickname is only a draft. After payment is verified, make
+  // the required explicit signature action discoverable as SAVE again.
+  const nicknameButton = document.getElementById('saveName');
+  if (hasEntry() && nicknameButton?.textContent === 'READY') nicknameButton.textContent = 'SAVE';
 
   if (!room) {
     createRaceButton.style.display = 'none';
