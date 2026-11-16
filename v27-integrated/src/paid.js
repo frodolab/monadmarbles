@@ -28,6 +28,20 @@ const pendingKey = 'monad-marbles-v27-pending-paid-entry-v1';
 const txRegex = /^0x[0-9a-fA-F]{64}$/;
 const addressRegex = /^0x[0-9a-fA-F]{40}$/;
 
+// Must match race-server/chain-verifier.js registrationMessage byte-for-byte.
+// The backend verifies this personal_sign against the actual paid entry wallet.
+export function registrationMessage({ raceId, txHash, nickname, contractAddress }) {
+  return [
+    'Monad Marbles Testnet Registration',
+    'Chain: 10143',
+    'Contract: ' + String(contractAddress).toLowerCase(),
+    'Race: ' + String(raceId),
+    'Transaction: ' + String(txHash).toLowerCase(),
+    'Nickname: ' + nickname,
+    'I authorize this nickname to be associated with my verified race entry.',
+  ].join('\n');
+}
+
 export const testnetExplorerTx = hash =>
   txRegex.test(String(hash || '')) ? 'https://testnet.monadexplorer.com/tx/' + hash : null;
 
