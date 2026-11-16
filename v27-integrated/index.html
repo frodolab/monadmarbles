@@ -654,7 +654,7 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
     <div class="bowl-canvas-area">
       <div id="walletConnected" class="wallet-connected-pill" role="status"></div>
       <canvas id="bowl" width="1000" height="620" aria-label="Transparent glass bowl containing registered marbles"></canvas>
-      <div class="bowl-timer" id="registrationTimer" aria-label="Registration closes in"><div class="timer-time" id="time">01:30</div></div><div class="pre-race-countdown" id="preRaceCountdown" aria-live="off" hidden><span class="pre-label">RACE STARTS IN</span><strong class="pre-number" id="preRaceNumber">10</strong><span class="pre-label">GET READY TO ROLL!</span></div>
+      <div class="pre-race-countdown" id="preRaceCountdown" aria-live="off" hidden><span class="pre-label">RACE STARTS IN</span><strong class="pre-number" id="preRaceNumber">10</strong><span class="pre-label">GET READY TO ROLL!</span></div>
     </div>
     <div class="entrants-summary"><span class="entrants-count"><span id="count">0</span> / 60 ENTRIES</span><span id="bowlCaption">Waiting for racers</span></div>
     <button class="btn pink main-join" id="join" type="button">JOIN THE RACE</button>
@@ -696,7 +696,7 @@ document.addEventListener('pointerdown',e=>{if(!themePicker.contains(e.target))s
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!themeMenu.hidden){setThemeMenu(false);themeTrigger.focus()}});
 
 const colors=[['Bubblegum','#ff5ba4'],['Tangerine','#ff914e'],['Lemon Drop','#ffdc55'],['Mint Chip','#5ae6c0'],['Blueberry','#6092ff'],['Grape Soda','#a582f5'],['Cherry Pop','#ef5d6d'],['Lime Rush','#a7e66e'],['Peachy','#ffb7a0'],['Cotton Candy','#e798ec'],['Sky Splash','#76dbf4'],['Midnight','#3c467b'],['Galaxy','#906cf1'],['Golden','#e7af40']];
-const $=id=>document.getElementById(id), choiceRow=$('choices');let lastPoolValue=null;let selected=0,remaining=90,running=false,finished=false,entrants=[],idCounter=0,lastTs=0,particles=[],timerHandle=0,toastHandle=0,connectedWallet=null,myMarble=null,mockAddress=null;
+const $=id=>document.getElementById(id), choiceRow=$('choices');let lastPoolValue=null;let selected=0,remaining=0,running=false,finished=false,entrants=[],idCounter=0,lastTs=0,particles=[],toastHandle=0,connectedWallet=null,myMarble=null,mockAddress=null;
 // Dev tokens live only in JS memory; refresh always returns to locked mode.
 let devToken=null;
 const stage=document.querySelector('.stage');
@@ -772,31 +772,15 @@ $('saveName').onclick=commitNickname;
 $('nick').addEventListener('keydown',e=>{if(e.key==='Enter')commitNickname()});
 function bot(count){if(finished||preRaceActive)return;let added=0;for(let i=0;i<count;i++){if(!add('Bot '+String(idCounter+1).padStart(2,'0'),Math.floor(Math.random()*colors.length)))break;added++}if(added)toast(added+' bot'+(added===1?'':'s')+' added')};$('addOne').onclick=async()=>{if(await authorizedDevAction('bot:add',{count:1}))bot(1)};$('addTen').onclick=async()=>{if(await authorizedDevAction('bot:add',{count:10}))bot(10)};
 
-// Registration and pre-race countdown are distinct phases. The 90-second
-// registration clock closes entries, then exactly ten displayed seconds elapse
-// before the existing V34 race curtain is triggered.
+// The server alone starts the ten-second countdown after the operator PIN.
 let preRaceActive=false,preRaceRemaining=10,preRaceLastTs=0;
-function beginPreRaceCountdown(){
- if(preRaceActive||raceActive||raceTransitioning)return;
- running=false;finished=true;remaining=0;preRaceActive=true;preRaceRemaining=10;preRaceLastTs=performance.now();
- $('registrationTimer').classList.remove('warning');
- $('preRaceCountdown').hidden=false;stage.classList.add('pre-race');
- $('preRaceNumber').textContent='10';
- closeModal();$('join').disabled=true;
- timeUI();toast('Registration closed — race starts in 10!');
-}
-function finishPreRaceCountdown(){
- if(!preRaceActive)return;
- preRaceActive=false;stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;
- if(entrants.length<2){toast('Not enough racers. Operator can start a new session.');return}
- beginRace();
-}
 // V25: Lobby V34 and Jack's V24 3D race are ONE experience. No 2D mock race.
 let raceActive=false,raceDone=false,raceWinner=null;
 let raceTransitioning=false,raceFrameReady=false,curtainCovered=false,hasRevealed=false;
 let currentPreloadId=0,coverHoldStart=0,preloadTimer=null,holdTimer=null,curtainEndHandler=null;
 let podiumTransitioning=false,podiumReady=false,podiumCovered=false,podiumRevealed=false;
 let podiumHoldStart=0,podiumHoldTimer=null,podiumEndHandler=null,podiumTimeout=null;
+let podiumReturnTimer=null,returnInProgress=false;
 const raceFrame=$('integratedRace');
 const curtain=$('raceCurtain'), overlay=$('raceTransition');
 const curtainTitle=curtain.querySelector('.curtain-title');
@@ -830,6 +814,8 @@ function beginPodiumTransition(){
    curtain.removeEventListener('transitionend',onPodiumCurtainEnd);podiumEndHandler=null;
    overlay.hidden=true;overlay.classList.remove('covering','revealing','impact');
    podiumTransitioning=false;clearTimeout(podiumTimeout);
+   clearTimeout(podiumReturnTimer);
+   podiumReturnTimer=setTimeout(returnToLobbyAfterRace,15000);
   }
  }
  curtain.addEventListener('transitionend',onPodiumCurtainEnd);
@@ -859,7 +845,7 @@ function activateRaceScene(){
  raceActive=true;running=false;finished=true;remaining=0;
  $('playerEditor').classList.add('race-locked');
  $('nick').disabled=true;$('saveName').disabled=true;
- $('time').parentElement.classList.add('is-racing');
+ /* Registration clock removed. */
  $('join').textContent=myMarble?'ENTERED RACE':'JOIN THE RACE';
  document.querySelector('.stage').classList.add('race-view');
  raceFrame.classList.add('active');raceFrame.setAttribute('aria-hidden','false');raceFrame.removeAttribute('tabindex');
@@ -938,19 +924,24 @@ window.addEventListener('message',event=>{
  }else if(event.data?.type==='monadmarbles:podium-ready'){
   if(podiumTransitioning){podiumReady=true;$('raceLoadingNote').hidden=true;tryRevealPodium();}
   }else if(event.data?.type==='monadmarbles:return-to-lobby'){
-  // Dismiss this completed round before clearing the iframe. The server can
-  // continue broadcasting payout updates for the SAME round after returning.
-  window.MonadMarblesPreviewBridge?.onReturnToLobby?.();
-  const shade=$('returnScreen');shade.classList.add('active');
-  setTimeout(()=>{
-    resetPreview();
-    window.MonadMarblesPreviewBridge?.restoreLobby?.();
-    requestAnimationFrame(()=>shade.classList.remove('active'));
-  },340);
+  returnToLobbyAfterRace();
  }
 });
+function returnToLobbyAfterRace(){
+ if(returnInProgress || !raceActive)return;
+ returnInProgress=true;
+ clearTimeout(podiumReturnTimer);podiumReturnTimer=null;
+ window.MonadMarblesPreviewBridge?.onReturnToLobby?.();
+ const shade=$('returnScreen');shade.classList.add('active');
+ setTimeout(()=>{
+  resetPreview();
+  window.MonadMarblesPreviewBridge?.restoreLobby?.();
+  requestAnimationFrame(()=>shade.classList.remove('active'));
+ },340);
+}
 function resetPreview(){
- clearTimeout(preloadTimer);clearTimeout(holdTimer);clearTimeout(podiumHoldTimer);clearTimeout(podiumTimeout);
+ clearTimeout(preloadTimer);clearTimeout(holdTimer);clearTimeout(podiumHoldTimer);clearTimeout(podiumTimeout);clearTimeout(podiumReturnTimer);
+ podiumReturnTimer=null;returnInProgress=false;
  if(podiumEndHandler){curtain.removeEventListener('transitionend',podiumEndHandler);podiumEndHandler=null}
  podiumTransitioning=false;podiumReady=false;podiumCovered=false;podiumRevealed=false;
  if(curtainEndHandler){curtain.removeEventListener('transitionend',curtainEndHandler);curtainEndHandler=null}
@@ -962,37 +953,20 @@ function resetPreview(){
  document.querySelector('.stage').classList.remove('race-view');
  raceActive=false;raceDone=false;raceWinner=null;raceTransitioning=false;
  raceFrameReady=false;curtainCovered=false;hasRevealed=false;
- remaining=90;running=false;finished=false;lastTs=0;preRaceActive=false;preRaceRemaining=10;preRaceLastTs=0;
- stage.classList.remove('pre-race');$('registrationTimer').classList.remove('warning');$('preRaceCountdown').hidden=true;$('join').disabled=false;
+ remaining=0;running=false;finished=false;lastTs=0;preRaceActive=false;preRaceRemaining=10;preRaceLastTs=0;
+ stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;$('join').disabled=false;
  entrants=[];particles=[];idCounter=0;myMarble=null;connectedWallet=null;mockAddress=null;
  $('playerEditor').hidden=true;$('playerEditor').classList.remove('race-locked');
  $('nick').disabled=false;$('saveName').disabled=false;$('nick').value='';
  $('join').textContent='JOIN THE RACE';$('join').classList.remove('joined-cta');
  $('walletConnected').classList.remove('visible');
- $('time').parentElement.classList.remove('is-racing');
+ /* Registration clock removed. */
  update();timeUI();
 }
 $('instantStart').onclick=async()=>{
- if(await authorizedDevAction('race:now')){running=false;preRaceActive=false;stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;$('registrationTimer').classList.remove('warning');beginRace()}
+ if(await authorizedDevAction('race:now')){running=false;preRaceActive=false;stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;beginRace()}
 };
-function timeUI(){
- // V27 server integration uses only a manually started, server-timed countdown.
- // Never let this retired 90-second timer alter the operator buttons.
- if(window.MonadMarblesPreviewBridge) return;
- const seconds=Math.max(0,Math.ceil(remaining));
- $('time').textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
- $('time').dataset.label=$('time').textContent;
- $('registrationTimer').classList.toggle('warning',running&&!finished&&seconds>=1&&seconds<=5);
- $('start').textContent=window.MonadMarblesPreviewBridge?.connected?'▶ START RACE':running?'Ⅱ PAUSE':finished?'✓ CLOSED':'▶ TIMER';
- $('start').disabled=finished;
- $('instantStart').textContent='⚡ RACE NOW';
- $('instantStart').disabled=raceActive||raceTransitioning;
-}
-$('start').onclick=async()=>{
- if(finished||preRaceActive)return;
- if(!await authorizedDevAction(running?'timer:pause':'timer:start'))return;
- running=!running;lastTs=performance.now();timeUI();toast(running?'90-second registration started':'Registration paused');
-};
+function timeUI(){} // Older calls are inert; only the server controls time.
 // Bowl is rendered in Canvas 2D with layered perspective shading to fake a 3D glass bowl.
 const canvas=$('bowl'),ctx=canvas.getContext('2d');let tPrevious=0;
 function sphere(x,y,r,col,alpha=1){ctx.save();ctx.globalAlpha=alpha;
@@ -1009,12 +983,12 @@ function sphere(x,y,r,col,alpha=1){ctx.save();ctx.globalAlpha=alpha;
 
 function ellipse(x,y,rx,ry,fill,stroke,width=1){ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.stroke()}}
 function markMine(x,y,r,ts){ctx.save();const pulse=.65+.25*Math.sin(ts*.005);ctx.strokeStyle=`rgba(255,224,91,${pulse})`;ctx.lineWidth=5;ctx.shadowColor='#ffe051';ctx.shadowBlur=17;ctx.beginPath();ctx.arc(x,y,r+7,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#fff1a0';ctx.textAlign='center';ctx.font='bold 24px Nunito, sans-serif';ctx.fillText('★',x,y-r-17);ctx.restore()}
-function frame(ts){let dt=Math.min(.04,(ts-tPrevious)/1000||0);tPrevious=ts;if(running&&!window.MonadMarblesPreviewBridge){if(lastTs)remaining=Math.max(0,remaining-(ts-lastTs)/1000);lastTs=ts;if(remaining<=0){beginPreRaceCountdown()}timeUI()}
+function frame(ts){let dt=Math.min(.04,(ts-tPrevious)/1000||0);tPrevious=ts;
 if(preRaceActive){
  const dtSecs=Math.max(0,(ts-preRaceLastTs)/1000);preRaceLastTs=ts;
  preRaceRemaining=Math.max(0,preRaceRemaining-dtSecs);
  const n=Math.max(0,Math.ceil(preRaceRemaining));$('preRaceNumber').textContent=String(n);
- if(preRaceRemaining<=0&&!window.MonadMarblesPreviewBridge?.connected)finishPreRaceCountdown();
+ 
 }
 ctx.clearRect(0,0,1000,620);if(raceActive){requestAnimationFrame(frame);return}let wave=ts*.00055;
 const cx=505, rimY=182, rimRx=330, rimRy=88, bodyBottom=526;
