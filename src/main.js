@@ -202,7 +202,9 @@ function createBeacon(p){
 const trackGeometry=new LineGeometry();
 const trailMaterial=new LineMaterial({color:0xff4a64,linewidth:4.5,transparent:true,opacity:1,depthTest:true});
 const trail=new Line2(trackGeometry,trailMaterial);
-trail.computeLineDistances();trail.frustumCulled=false;scene.add(trail);
+// Do not call computeLineDistances() until setPositions() has populated
+// instanceStart / instanceEnd. Calling it on empty geometry crashes startup.
+trail.frustumCulled=false;scene.add(trail);
 function updateTrail(){
   const coords=[];
   const pts=sim.path;
@@ -463,6 +465,10 @@ const storedAddress=localStorage.getItem('selene-registry-address')||sim.contrac
 if(storedAddress){sim.contract=storedAddress;$('contract-address').value=storedAddress;}
 
 let lastFrame=performance.now();let hudTimer=0;let captureTime=0;let cameraZoom=1;
+// Start at the rover instead of easing from the origin (inside lunar terrain).
+// The camera then continues to smoothly follow the autonomous rover.
+camera.position.set(sim.x-18,surfaceY(sim.x,sim.z)+10,sim.z);
+camera.lookAt(sim.x,surfaceY(sim.x,sim.z)+2.6,sim.z);
 sceneEl.addEventListener('wheel',e=>{e.preventDefault();cameraZoom=clamp(cameraZoom+Math.sign(e.deltaY)*.08,.55,2.3);},{passive:false});
 window.addEventListener('resize',resize);
 function resize(){

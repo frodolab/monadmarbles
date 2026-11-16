@@ -24,6 +24,11 @@
       <main class="dashboard">
         <section class="viewport" aria-label="3D lunar rover simulation">
           <div id="scene" class="scene"></div>
+          <div id="startup-error" class="startup-error hidden" role="alert" aria-live="assertive">
+            <strong>3D SIMULATION COULD NOT START</strong>
+            <span id="startup-error-message">Open the browser console for details.</span>
+            <small>Check the error and reload the page (Command + Shift + R on Mac).</small>
+          </div>
           <div class="viewport-gradient"></div>
           <div class="scene-top-left">
             <div class="eyebrow"><span class="small-green-dot"></span> LIVE SIMULATION <span class="eyebrow-divider">/</span> SOUTH POLAR SECTOR</div>
@@ -71,6 +76,24 @@
       </main>
       <footer class="footer"><span>SELENE AUTONOMOUS EXPLORATION SYSTEM <span class="muted">© DEMONSTRATION / SYNTHETIC DATA ONLY</span></span><span>SIMULATION ENVIRONMENT <b>·</b> POWERED BY <strong>MONAD</strong></span></footer>
     </div>
+    <script>
+      // Make module startup errors visible instead of showing an inert dashboard.
+      function seleneStartupError(message) {
+        var box = document.getElementById('startup-error');
+        var detail = document.getElementById('startup-error-message');
+        if (!box || !detail) return;
+        detail.textContent = message || 'Open the browser console for details.';
+        box.classList.remove('hidden');
+        document.getElementById('system-status').textContent = 'SIMULATION ERROR — CHECK CONSOLE';
+      }
+      window.addEventListener('error', function(event) {
+        seleneStartupError(event.message || '3D initialization failed.');
+      });
+      window.addEventListener('unhandledrejection', function(event) {
+        var reason = event.reason;
+        seleneStartupError(reason && reason.message ? reason.message : String(reason));
+      });
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

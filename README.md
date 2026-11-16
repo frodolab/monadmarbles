@@ -27,6 +27,25 @@ npm run dev
 ```
 
 Open the URL printed by Vite (normally `http://localhost:5173`). No wallet or contract is necessary to use the simulation.
+ 
+### Important: `.env.example` is only a template
+
+`cp .env.example .env` creates a local `.env` file. **All three settings can stay empty/default while testing the 3D simulator.** The optional values are:
+
+| Setting | Meaning | Needed for 3D demo? |
+|---|---|---|
+| `VITE_CONTRACT_ADDRESS=` | The deployed `IceDiscoveryRegistry` contract address (a public `0x` address). Copy it from the deployment output, not from your wallet. | No |
+| `MONAD_TESTNET_RPC=https://testnet-rpc.monad.xyz` | Monad **testnet** JSON-RPC URL used by the Hardhat deployment script. Leave the default unless a valid alternative RPC is required. | No |
+| `DEPLOYER_PRIVATE_KEY=` | **Secret** key for a dedicated, funded **testnet-only** deployment wallet, used by Hardhat on your computer. Never share it, paste it into chat, or commit `.env` to GitHub. | No |
+
+The website connects directly to MetaMask when you click **CONNECT WALLET**; it does not read your deployment key. `VITE_` values are included in the frontend bundle and must **never** contain secrets. `.gitignore` excludes `.env`.
+
+### Blank viewport or buttons not responding?
+
+The first version had a startup bug: it called `computeLineDistances()` on an empty `LineGeometry`, which crashes module initialization. This version fixes that. If you still see a blank viewport, check the visible error panel and open Chrome DevTools (`⌘⌥J` on Mac) to inspect the first red console error. Ensure you opened the Vite URL rather than the `index.html` file directly, and try `⌘⇧R` (hard reload). Some browsers/devices may also block WebGL.
+
+`npm install` may report dependency deprecations or audit advisories even after a successful installation. Those warnings do not by themselves prevent the page from running. Inspect details using `npm audit` and avoid blindly using `npm audit fix --force`, which can replace packages with breaking major versions. Verify `npm run build` and `npm test` after upgrading dependencies.
+
 
 ## Deploy to Monad Testnet
 
