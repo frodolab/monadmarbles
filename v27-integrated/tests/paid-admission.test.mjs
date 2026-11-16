@@ -49,5 +49,5 @@ test('a saved nickname uses the exact EIP-191 message verified by the server',()
     'Transaction: '+tx.toLowerCase(),
     'Nickname: Marble King',
     'I authorize this nickname to be associated with my verified race entry.',
-  ].join('\\n'));
+  ].join('\n'));
 });
