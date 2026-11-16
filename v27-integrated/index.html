@@ -593,7 +593,7 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
 @media(max-width:650px){.mm-organizer-panel{max-width:97%;padding:8px;gap:5px}.mm-organizer-panel .mm-org-title{width:100%;text-align:center}.mm-organizer-panel .mm-org-pin{width:105px}}
 /* V27 public lobby: no secondary wallet CTA, tags, map menu, status boxes,
    toast notifications or organizer controls outside the PIN-locked devbox. */
-#themeTrigger,#currentThemeLabel,#themeMenu,.mock-note,.footer,.wallet-connected-pill,
+#themeTrigger,#currentThemeLabel,#themeMenu,.race-stage-heading,.mock-note,.footer,.wallet-connected-pill,
 #livePreviewStatus,#onchainSettlementStatus,#mmLobbyNotice,#mmModeSwitch,
 #walletConnectCta,#mmOrganizerPanel,.toast,#toast {display:none!important}
 </style>
@@ -1239,7 +1239,7 @@ window.MonadMarblesPreviewBridge={
   $('start').disabled=!isLobby||incoming.length<2;
  },
  setFrame(frame){
-  if(frame?.course!=='v27')return;
+  if(frame?.course!=='v27'||this.isDismissed(syncedRaceKey))return;
   if(this.lastFrame && this.lastFrame.raceId===frame.raceId &&
      this.lastFrame.sessionId===frame.sessionId && frame.tick<this.lastFrame.tick)return;
   this.lastFrame=frame;
@@ -1248,6 +1248,7 @@ window.MonadMarblesPreviewBridge={
   }
  },
  setOfficialResult(result){
+  if(this.isDismissed(syncedRaceKey))return;
   // These fields are derived only from the same authoritative room as
   // the official winner; neither UI nor wallet selects the payout recipient.
   const source=this.liveRoom;
