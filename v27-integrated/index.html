@@ -591,6 +591,11 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
 .mm-organizer-panel #mmOrganizerHelp{flex-basis:100%;margin:0;text-align:center;font:800 11px Nunito,system-ui,sans-serif;line-height:1.3;color:#f9e3a0}
 .mm-organizer-panel button:focus-visible,.mm-organizer-panel input:focus-visible{outline:3px solid #ffdb67;outline-offset:2px}
 @media(max-width:650px){.mm-organizer-panel{max-width:97%;padding:8px;gap:5px}.mm-organizer-panel .mm-org-title{width:100%;text-align:center}.mm-organizer-panel .mm-org-pin{width:105px}}
+/* V27 public lobby: no secondary wallet CTA, tags, map menu, status boxes,
+   toast notifications or organizer controls outside the PIN-locked devbox. */
+#themeTrigger,#currentThemeLabel,#themeMenu,.mock-note,.footer,.wallet-connected-pill,
+#livePreviewStatus,#onchainSettlementStatus,#mmLobbyNotice,#mmModeSwitch,
+#walletConnectCta,#mmOrganizerPanel,.toast,#toast {display:none!important}
 </style>
 </head>
 <body>
@@ -652,23 +657,7 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
       <div class="bowl-timer" id="registrationTimer" aria-label="Registration closes in"><div class="timer-time" id="time">01:30</div></div><div class="pre-race-countdown" id="preRaceCountdown" aria-live="off" hidden><span class="pre-label">RACE STARTS IN</span><strong class="pre-number" id="preRaceNumber">10</strong><span class="pre-label">GET READY TO ROLL!</span></div>
     </div>
     <div class="entrants-summary"><span class="entrants-count"><span id="count">0</span> / 60 ENTRIES</span><span id="bowlCaption">Waiting for racers</span></div>
-    <div class="mm-lobby-controls" aria-label="Wallet and registration status">
-      <button class="mm-wallet-cta" id="walletConnectCta" type="button">🦊 CONNECT METAMASK</button>
-      <p class="mm-lobby-notice" id="mmLobbyNotice" role="status">Connecting to the race server…</p>
-      <a class="mm-mode-switch" id="mmModeSwitch" href="/?demo=1">Try free demo with bots</a>
-    </div>
-    <button class="btn pink main-join" id="join" type="button">✦ JOIN THE RACE ✦</button>
-    <section class="mm-organizer-panel" id="mmOrganizerPanel" aria-label="Race organizer controls" hidden>
-      <strong class="mm-org-title">⚙ ORGANIZER</strong>
-      <button type="button" id="mmOpenLobby">＋ OPEN SUBMISSIONS</button>
-      <label id="mmPinField" for="mmOperatorPin" hidden>
-        <span class="visually-hidden">Operator PIN</span>
-        <input class="mm-org-pin" id="mmOperatorPin" type="password" inputmode="numeric" placeholder="Operator PIN" autocomplete="off" aria-label="Operator PIN">
-      </label>
-      <button type="button" id="mmStartRace" hidden>▶ START RACE</button>
-      <button type="button" class="mm-danger" id="mmCancelRace" hidden>CANCEL RACE</button>
-      <p id="mmOrganizerHelp" role="status">Connect the contract owner's MetaMask wallet to open registration.</p>
-    </section>
+    <button class="btn pink main-join" id="join" type="button">JOIN THE RACE</button>
   </div>
 </section>
 <section class="selector player-editor" id="playerEditor" aria-label="Your marble customization" hidden>
@@ -871,7 +860,7 @@ function activateRaceScene(){
  $('playerEditor').classList.add('race-locked');
  $('nick').disabled=true;$('saveName').disabled=true;
  $('time').parentElement.classList.add('is-racing');
- $('join').textContent=myMarble?'✓ RACING':'RACE IN PROGRESS';
+ $('join').textContent=myMarble?'ENTERED RACE':'JOIN THE RACE';
  document.querySelector('.stage').classList.add('race-view');
  raceFrame.classList.add('active');raceFrame.setAttribute('aria-hidden','false');raceFrame.removeAttribute('tabindex');
  update();timeUI();
@@ -948,9 +937,16 @@ window.addEventListener('message',event=>{
   beginPodiumTransition();
  }else if(event.data?.type==='monadmarbles:podium-ready'){
   if(podiumTransitioning){podiumReady=true;$('raceLoadingNote').hidden=true;tryRevealPodium();}
- }else if(event.data?.type==='monadmarbles:return-to-lobby'){
+  }else if(event.data?.type==='monadmarbles:return-to-lobby'){
+  // Dismiss this completed round before clearing the iframe. The server can
+  // continue broadcasting payout updates for the SAME round after returning.
+  window.MonadMarblesPreviewBridge?.onReturnToLobby?.();
   const shade=$('returnScreen');shade.classList.add('active');
-  setTimeout(()=>{resetPreview();requestAnimationFrame(()=>shade.classList.remove('active'))},340);
+  setTimeout(()=>{
+    resetPreview();
+    window.MonadMarblesPreviewBridge?.restoreLobby?.();
+    requestAnimationFrame(()=>shade.classList.remove('active'));
+  },340);
  }
 });
 function resetPreview(){
@@ -971,7 +967,7 @@ function resetPreview(){
  entrants=[];particles=[];idCounter=0;myMarble=null;connectedWallet=null;mockAddress=null;
  $('playerEditor').hidden=true;$('playerEditor').classList.remove('race-locked');
  $('nick').disabled=false;$('saveName').disabled=false;$('nick').value='';
- $('join').textContent='✦ JOIN THE RACE ✦';$('join').classList.remove('joined-cta');
+ $('join').textContent='JOIN THE RACE';$('join').classList.remove('joined-cta');
  $('walletConnected').classList.remove('visible');
  $('time').parentElement.classList.remove('is-racing');
  update();timeUI();
@@ -1131,6 +1127,7 @@ window.MonadMarblesPreviewBridge={
  connected:false,pendingResult:null,liveRoom:null,
  getSelectedDesign(){return selected},
  getOperatorPin(){return devToken||''},
+ currentRaceKey(){return syncedRaceKey},
  toast,
  setConnected(yes){this.connected=Boolean(yes);if(!yes)$('start').disabled=true;},
  setWallet(address){
@@ -1153,6 +1150,7 @@ window.MonadMarblesPreviewBridge={
   if(syncedRaceKey!==key){
    if(syncedRaceKey)resetPreview();
    syncedRaceKey=key;this.pendingResult=null;this.lastFrame=null;
+   this.onNewRace?.(key);
   }
   // Treat the server roster as EXACTLY authoritative: no stale local
   // entries and no unverified "mock wallet" entries survive synchronization.
@@ -1197,7 +1195,7 @@ window.MonadMarblesPreviewBridge={
    stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;
   }
   $('join').disabled=!isLobby||Boolean(myMarble)||incoming.length>=next.maxPlayers||(next.demoOnly===false&&!this.joinReady?.());
-  $('join').textContent=myMarble?'✓ ENTERED':'✦ CONNECT & JOIN PREVIEW ✦';
+  $('join').textContent=myMarble?'ENTERED RACE':'JOIN THE RACE';
   $('start').disabled=!isLobby||incoming.length<2;
   $('addOne').disabled=!isLobby;$('addTen').disabled=!isLobby;
   $('count').textContent=String(incoming.length);
@@ -1209,10 +1207,14 @@ window.MonadMarblesPreviewBridge={
     $('preRaceCountdown').hidden=false;stage.classList.add('pre-race');
     $('preRaceNumber').textContent=String(Math.ceil(preRaceRemaining));
   }
-  if((next.phase==='racing'||next.phase==='finished')&&!raceActive&&!raceTransitioning){
+  // Only an ACTIVE race opens the 3D iframe. A finished room must remain in
+  // the bowl after return-to-lobby, refresh, or additional payout broadcasts.
+  if(next.phase==='racing'&&!raceActive&&!raceTransitioning&&!this.isDismissed?.(key)){
     preRaceActive=false;stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;beginRace();
   }
-  if(next.phase==='finished'&&next.winnerId){this.setOfficialResult({winnerId:next.winnerId,finishOrder:next.finishOrder||[]});}
+  if(next.phase==='finished'&&next.winnerId&&raceActive&&!this.isDismissed?.(key)){
+    this.setOfficialResult({winnerId:next.winnerId,finishOrder:next.finishOrder||[]});
+  }
   update();
   $('pool').textContent=this.poolDisplay?.()??(incoming.length*Number(next.demoEntryFee||0.1)).toFixed(1);
   $('count').textContent=String(incoming.length);
