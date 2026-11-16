@@ -101,6 +101,9 @@ export class GameAudio {
     if (this.enabled && this.visible() && this.context) this._startMusic();
     else this._stopMusic();
     if (!this.enabled) this._stopCountdown();
+    else if (this.phase === 'countdown' && this.room && this.countdownTimer == null) {
+      this._startCountdown(this.room.startsAt, this.room.serverTime);
+    }
   }
 
   unlock() {
