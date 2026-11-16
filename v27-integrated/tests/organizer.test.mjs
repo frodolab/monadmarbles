@@ -48,11 +48,17 @@ test('paid controls are not shown in free demo, countdown, racing or finished',(
     assert.equal(v.open,false);
   }
 });
-test('the V27 page exposes discoverable organizer buttons and private PIN input',async()=>{
+test('every organizer control is behind the PIN-locked devbox, not on the public lobby',async()=>{
   const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
-  for(const id of ['mmOrganizerPanel','mmOpenLobby','mmStartRace','mmOperatorPin','mmOrganizerHelp']){
-    assert.match(html,new RegExp('id="'+id+'"'));
-  }
-  assert.match(html,/<input[^>]+id="mmOperatorPin"[^>]+type="password"|<input[^>]+type="password"[^>]+id="mmOperatorPin"/);
-  assert.doesNotMatch(html,/<(?:button|input)[^>]+id="mmOpenLobby"[^>]+disabled/);
+  const js=await readFile(new URL('../src/live.js',import.meta.url),'utf8');
+  assert.match(html,/class="devbuttons"/);
+  assert.match(html,/id="devAccess"/);
+  assert.match(html,/\.stage:not\(\.dev-unlocked\) \.devbox\{display:none!important\}/);
+  assert.doesNotMatch(html,/id="mmOrganizerPanel"/);
+  assert.doesNotMatch(html,/id="mmOpenLobby"/);
+  assert.doesNotMatch(html,/id="mmOperatorPin"/);
+  assert.match(js,/const controls = document\.querySelector\('\.devbuttons'\)/);
+  assert.match(js,/controls\.append\(createRaceButton\)/);
+  assert.match(js,/controls\.append\(cancelRaceButton\)/);
+  assert.match(js,/start\.onclick = async/);
 });
