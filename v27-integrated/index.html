@@ -597,6 +597,7 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
 #livePreviewStatus,#onchainSettlementStatus,#mmLobbyNotice,#mmModeSwitch,
 #walletConnectCta,#mmOrganizerPanel,.toast,#toast,#playerWallet{display:none!important}
 .nickname-field{display:flex!important}
+#playerEditor[hidden]{display:none!important}
 </style>
 </head>
 <body>
@@ -1127,7 +1128,8 @@ window.MonadMarblesPreviewBridge={
     x.name.toLowerCase()===(address.slice(0,6)+'…'+address.slice(-4)).toLowerCase());
   myMarble=p||null;
   if(this.liveRoom?.demoOnly===false){
-   $('playerEditor').hidden=false;
+   $('playerEditor').hidden=!(this.liveRoom.phase==='lobby' &&
+     this.liveRoom.blockchain?.status==='open');
    document.querySelector('.nickname-field').style.display='flex';
    $('playerWallet').textContent='';
   }else if(p){syncPlayerPreview()}
@@ -1173,7 +1175,7 @@ window.MonadMarblesPreviewBridge={
   if(wallet){
    mockAddress=wallet;
    if(next.demoOnly===false){
-    $('playerEditor').hidden=false;
+    $('playerEditor').hidden=!(next.phase==='lobby'&&next.blockchain?.status==='open');
     document.querySelector('.nickname-field').style.display='flex';
     $('playerWallet').textContent='';
    }
