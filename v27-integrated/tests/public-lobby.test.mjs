@@ -32,7 +32,9 @@ test('no lobby map selector, purple toast, prize badge or floating HUD is shown'
   assert.match(race,/function toast\(msg\)\{if\(handoff\?\.livePreview\)return;/);
 });
 test('MetaMask Connect never auto adds or switches chains, no duplicate approval requests',()=>{
-  assert.equal((live.match(/eth_requestAccounts/g)||[]).filter(Boolean).length,2);
+  assert.equal((live.match(/method:\s*'eth_requestAccounts'/g)||[]).length,1, 'only one user-triggered permission request');
+  assert.match(live,/async function restoreWalletSilently\(\)/);
+  assert.match(live,/void restoreWalletSilently\(\)/);
   assert.match(live,/if \(connectInFlight\) return connectInFlight/);
   assert.match(live,/method: 'eth_accounts'/);
   assert.doesNotMatch(live,/method: 'wallet_switchEthereumChain'|method: 'wallet_addEthereumChain'/);
