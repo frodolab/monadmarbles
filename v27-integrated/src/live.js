@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 import { createPaidIntegration, formatWei, testnetExplorerTx, validateOnchainRoom } from './paid.js';
-import { lobbyPresentation } from './lobby-status.js';
+import { lobbyPresentation, organizerPresentation } from './lobby-status.js';
 
 // Only the preconfigured free sandbox may be selected; no arbitrary RPC URL.
 const freeDemo = new URLSearchParams(location.search).get('demo') === '1';
@@ -221,34 +221,82 @@ const devTitle = document.querySelector('#devModalTitle');
 if (devTitle) devTitle.textContent = 'Sandbox Operator PIN';
 const devHint = document.querySelector('#devModal p');
 if (devHint) devHint.textContent = 'This PIN is validated by the shared race server when starting a preview race.';
-// The following controls are kept inside V27's existing operator panel.
-// The browser may create/cancel a race only through a MetaMask transaction.
-// Winner payouts are NEVER initiated from these buttons.
-const controls = document.querySelector('.devbuttons');
-const createRaceButton = document.createElement('button');
-createRaceButton.type = 'button';
-createRaceButton.id = 'createPaidRace';
-createRaceButton.textContent = '＋ CREATE ON-CHAIN RACE';
+// Organizer actions are always discoverable in the normal V27 paid lobby.
+// Open submissions is a contract-owner MetaMask transaction; starting requires
+// the operator PIN and is enforced independently by the paid race server.
+// Neither action authorizes or initiates a winner payout in the browser.
+const organizerPanel = document.getElementById('mmOrganizerPanel');
+const organizerHelp = document.getElementById('mmOrganizerHelp');
+const organizerPin = document.getElementById('mmOperatorPin');
+const organizerPinField = document.getElementById('mmPinField');
+const createRaceButton = document.getElementById('mmOpenLobby');
+const startPaidButton = document.getElementById('mmStartRace');
+const cancelRaceButton = document.getElementById('mmCancelRace');
+let organizerActionBusy = false;
+
 createRaceButton.onclick = async () => {
+  if (organizerActionBusy || paid.busy) return;
+  organizerActionBusy = true;
+  organizerHelp.textContent = 'Connecting the contract owner and preparing Create Race…';
+  renderLiveControls();
   try {
     if (!wallet) await connectWallet();
     await paid.createRace();
-  } catch (error) { notify(error.message || 'Could not create contract race'); }
+    organizerHelp.textContent = 'Race creation confirmed. Waiting for on-chain registrations to open…';
+  } catch (error) {
+    const message = error?.message || 'Could not open on-chain registration';
+    organizerHelp.textContent = message;
+    notify(message);
+  } finally {
+    organizerActionBusy = false;
+    renderLiveControls();
+  }
 };
-controls.append(createRaceButton);
 
-const cancelRaceButton = document.createElement('button');
-cancelRaceButton.type = 'button';
-cancelRaceButton.id = 'cancelPaidRace';
-cancelRaceButton.textContent = 'CANCEL & ENABLE REFUNDS';
+startPaidButton.onclick = async () => {
+  if (organizerActionBusy || paid.busy || !isPaid()) return;
+  const pin = organizerPin.value.trim() || ui.getOperatorPin();
+  if (!pin) {
+    organizerHelp.textContent = 'Enter the backend OPERATOR_PIN above to start the race.';
+    organizerPin.focus();
+    return;
+  }
+  organizerActionBusy = true;
+  organizerHelp.textContent = 'Closing on-chain entries and verifying participants. The server will start the ten-second countdown…';
+  renderLiveControls();
+  try {
+    const started = await ui.start(pin);
+    if (started) {
+      organizerPin.value = '';
+      organizerHelp.textContent = 'Registration closed on-chain. The synchronized ten-second countdown will begin.';
+    } else {
+      organizerHelp.textContent = 'Start was rejected. Verify the operator PIN, entrants and blockchain state.';
+    }
+  } finally {
+    organizerActionBusy = false;
+    renderLiveControls();
+  }
+};
+
 cancelRaceButton.onclick = async () => {
-  if (!window.confirm('Cancel this on-chain race? Entrants must claim their own refunds.')) return;
+  if (organizerActionBusy || paid.busy || !isPaid()) return;
+  if (!window.confirm('Cancel this REAL Monad Testnet race? Entrants must claim their own refunds.')) return;
+  organizerActionBusy = true;
+  organizerHelp.textContent = 'Waiting for owner-authorized cancellation transaction…';
+  renderLiveControls();
   try {
     if (!wallet) await connectWallet();
     await paid.cancelRace();
-  } catch (error) { notify(error.message || 'Could not cancel contract race'); }
+    organizerHelp.textContent = 'Race canceled. Entrants can claim refunds from the contract.';
+  } catch (error) {
+    const message = error?.message || 'Could not cancel contract race';
+    organizerHelp.textContent = message;
+    notify(message);
+  } finally {
+    organizerActionBusy = false;
+    renderLiveControls();
+  }
 };
-controls.append(cancelRaceButton);
 
 const pendingButton = document.createElement('button');
 pendingButton.type = 'button';
@@ -292,13 +340,23 @@ function renderLiveControls() {
     return;
   }
   const paying = isPaid();
+  const organizerView = organizerPresentation({
+    room, connected: socket.connected, busy: organizerActionBusy || paid.busy,
+  });
+  organizerPanel.hidden = !organizerView.visible;
+  createRaceButton.hidden = !organizerView.open;
+  createRaceButton.disabled = !organizerView.canOpen;
+  startPaidButton.hidden = !organizerView.start;
+  startPaidButton.disabled = !organizerView.canStart;
+  organizerPinField.hidden = !organizerView.start;
+  cancelRaceButton.hidden = !organizerView.cancel;
+  cancelRaceButton.disabled = !socket.connected || paid.busy || organizerActionBusy;
+  // Preserve helpful action-specific errors instead of immediately overwriting
+  // them with a generic status while an on-chain transaction is still pending.
+  if (!organizerActionBusy) organizerHelp.textContent = organizerView.help;
   document.getElementById('addOne').style.display = paying ? 'none' : '';
   document.getElementById('addTen').style.display = paying ? 'none' : '';
   instantStart.style.display = paying ? 'none' : '';
-  createRaceButton.style.display = paying && room.blockchain?.status === 'waiting' ? '' : 'none';
-  createRaceButton.disabled = !socket.connected || paid.busy;
-  cancelRaceButton.style.display = paying && ['open', 'closed', 'interrupted'].includes(room.blockchain?.status) ? '' : 'none';
-  cancelRaceButton.disabled = !socket.connected || paid.busy;
   const payment = paid.pending;
   pendingButton.style.display = paying && payment ? '' : 'none';
   pendingButton.disabled = paid.busy;
