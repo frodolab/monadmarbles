@@ -580,6 +580,17 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
 .mm-lobby-notice{color:#34275f;font-family:Nunito,system-ui,sans-serif;font-size:12px;font-weight:800;line-height:1.25;text-align:center;max-width:435px;margin:2px 0;min-height:27px}
 .mm-mode-switch{font:800 11px Nunito,system-ui,sans-serif;text-decoration:underline;color:#50358c;cursor:pointer}
 #join:disabled{cursor:not-allowed;opacity:.66}
+#mmOrganizerPanel[hidden],#mmOpenLobby[hidden],#mmStartRace[hidden],#mmCancelRace[hidden],#mmPinField[hidden]{display:none!important}
+.mm-organizer-panel{box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;column-gap:9px;row-gap:6px;max-width:min(620px,97%);margin:6px auto 8px;padding:9px 13px;border:2px solid #a18fe1;border-radius:15px;background:rgba(44,34,100,.96);color:#fff4d6;font-family:Nunito,system-ui,sans-serif;position:relative;z-index:15;box-shadow:0 4px 0 #7d5b9d}
+.mm-organizer-panel .mm-org-title{font:900 11px Nunito,system-ui,sans-serif;letter-spacing:.8px;white-space:nowrap}
+.mm-organizer-panel button{font:900 12px Nunito,system-ui,sans-serif;border:2px solid #f9e6bc;border-radius:10px;padding:8px 12px;color:#33275c;background:#ffdb75;cursor:pointer;min-height:35px}
+.mm-organizer-panel button:hover:not(:disabled){background:#ffed9f}
+.mm-organizer-panel button:disabled{cursor:not-allowed;opacity:.5}
+.mm-organizer-panel .mm-danger{background:#45325e;border-color:#8e85b4;color:#eedbdc;font-size:10px;padding:6px 9px}
+.mm-organizer-panel .mm-org-pin{min-width:95px;max-width:130px;width:130px;border:2px solid #9f96d3;border-radius:9px;padding:7px;background:#fff;color:#241952;font:800 12px Nunito,system-ui,sans-serif}
+.mm-organizer-panel #mmOrganizerHelp{flex-basis:100%;margin:0;text-align:center;font:800 11px Nunito,system-ui,sans-serif;line-height:1.3;color:#f9e3a0}
+.mm-organizer-panel button:focus-visible,.mm-organizer-panel input:focus-visible{outline:3px solid #ffdb67;outline-offset:2px}
+@media(max-width:650px){.mm-organizer-panel{max-width:97%;padding:8px;gap:5px}.mm-organizer-panel .mm-org-title{width:100%;text-align:center}.mm-organizer-panel .mm-org-pin{width:105px}}
 </style>
 </head>
 <body>
@@ -647,6 +658,17 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
       <a class="mm-mode-switch" id="mmModeSwitch" href="/?demo=1">Try free demo with bots</a>
     </div>
     <button class="btn pink main-join" id="join" type="button">✦ JOIN THE RACE ✦</button>
+    <section class="mm-organizer-panel" id="mmOrganizerPanel" aria-label="Race organizer controls" hidden>
+      <strong class="mm-org-title">⚙ ORGANIZER</strong>
+      <button type="button" id="mmOpenLobby">＋ OPEN SUBMISSIONS</button>
+      <label id="mmPinField" for="mmOperatorPin" hidden>
+        <span class="visually-hidden">Operator PIN</span>
+        <input class="mm-org-pin" id="mmOperatorPin" type="password" inputmode="numeric" placeholder="Operator PIN" autocomplete="off" aria-label="Operator PIN">
+      </label>
+      <button type="button" id="mmStartRace" hidden>▶ START RACE</button>
+      <button type="button" class="mm-danger" id="mmCancelRace" hidden>CANCEL RACE</button>
+      <p id="mmOrganizerHelp" role="status">Connect the contract owner's MetaMask wallet to open registration.</p>
+    </section>
   </div>
 </section>
 <section class="selector player-editor" id="playerEditor" aria-label="Your marble customization" hidden>
