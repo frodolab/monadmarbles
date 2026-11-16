@@ -68,6 +68,8 @@ const getMetaMaskProvider = () => {
   return candidates.find(candidate => candidate?.isMetaMask) || (injected?.isMetaMask ? injected : null);
 };
 let connectInFlight = null;
+// Reuse an optional nickname signature when retrying the same server update.
+const nicknameSignatures = new Map();
 const connectWallet = async () => {
   if (connectInFlight) return connectInFlight;
   const provider = getMetaMaskProvider();
@@ -106,6 +108,22 @@ getMetaMaskProvider()?.on?.('accountsChanged', accounts => {
   renderLiveControls();
 });
 getMetaMaskProvider()?.on?.('chainChanged', () => notify('Wallet network changed; switch to Monad Testnet'));
+
+// Restore previously granted MetaMask permission silently on reload.
+// Never call eth_requestAccounts during page load.
+async function restoreWalletSilently() {
+  const provider = getMetaMaskProvider();
+  if (!provider?.request || wallet || connectInFlight) return;
+  try {
+    const accounts = await provider.request({ method: 'eth_accounts' });
+    if (!Array.isArray(accounts) || !/^0x[0-9a-f]{40}$/i.test(String(accounts[0] || ''))) return;
+    if (wallet || connectInFlight) return;
+    wallet = accounts[0];
+    ui.setWallet(wallet);
+    ui.applyRoom(room, wallet);
+    renderLiveControls();
+  } catch { /* A locked wallet must not prompt on page load. */ }
+}
 
 const paid = createPaidIntegration({
   getRoom: () => room,
@@ -220,9 +238,13 @@ ui.saveNickname = async rawValue => {
       raceId, txHash: entry.txHash, nickname,
       contractAddress: room.blockchain.contractAddress,
     });
-    const signature = await provider.request({
-      method: 'personal_sign', params: [message, wallet],
-    });
+    const signatureKey = wallet.toLowerCase() + ':' + raceId + ':' +
+      entry.txHash.toLowerCase() + ':' + nickname;
+    let signature = nicknameSignatures.get(signatureKey);
+    if (!signature) {
+      signature = await provider.request({ method: 'personal_sign', params: [message, wallet] });
+      if (/^0x[0-9a-f]{130}$/i.test(String(signature || ''))) nicknameSignatures.set(signatureKey, signature);
+    }
     if (!/^0x[0-9a-f]{130}$/i.test(String(signature || ''))) {
       throw new Error('MetaMask did not return a valid nickname signature.');
     }
@@ -282,7 +304,7 @@ document.querySelectorAll('[data-wallet]').forEach(button => {
 const walletTitle = document.querySelector('#walletTitle');
 if (walletTitle) walletTitle.textContent = 'CONNECT METAMASK · PREVIEW';
 const disclaimer = document.querySelector('.wallet-disclaimer');
-if (disclaimer) disclaimer.textContent = 'SANDBOX · CONNECT REAL METAMASK · NO ENTRY TRANSACTION';
+if (disclaimer) disclaimer.textContent = 'CONNECT ONCE · NO TRANSACTION OR SIGNATURE DURING CONNECTION';
 document.querySelector('.footer').textContent = 'V27 INTEGRATION SANDBOX · SHARED SERVER · NO ON-CHAIN ENTRY OR PAYOUT';
 document.querySelector('.mock-note').textContent = 'FREE SANDBOX';
 document.getElementById('join').textContent = 'JOIN THE RACE';
@@ -417,7 +439,7 @@ function renderLiveControls() {
   // A pre-entry nickname is only a draft. After payment is verified, make
   // the required explicit signature action discoverable as SAVE again.
   const nicknameButton = document.getElementById('saveName');
-  if (hasEntry() && nicknameButton?.textContent === 'READY') nicknameButton.textContent = 'SAVE';
+  if (hasEntry() && nicknameButton?.textContent === 'READY') nicknameButton.textContent = 'SIGN NAME (OPTIONAL)';
 
   if (!room) {
     createRaceButton.style.display = 'none';
@@ -454,6 +476,8 @@ function renderLiveControls() {
   document.querySelector('.footer').hidden = true;
 }
 
+// Reuse an approved account without a second wallet permission popup.
+void restoreWalletSilently();
 socket.on('connect', () => { status.textContent = 'Connected · waiting for race state'; renderLiveControls(); });
 socket.on('disconnect', () => { status.textContent = 'Race server reconnecting · wallet remains available'; ui.setConnected(false); renderLiveControls(); });
 socket.on('connect_error', () => { status.textContent = 'Cannot reach race server · retrying'; ui.setConnected(false); renderLiveControls(); });
