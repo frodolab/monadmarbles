@@ -1,7 +1,7 @@
 name: V27 integration preview checks
 on:
   push:
-    branches: [feature/v27-backend-integration-preview]
+    branches: [feature/v27-backend-integration-preview, fix/v27-wallet-prompts-current]
   workflow_dispatch:
 
 jobs:
