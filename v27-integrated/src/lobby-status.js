@@ -55,3 +55,48 @@ export function lobbyPresentation({room, connected, hasWallet=false, joined=fals
     message:'Contract registration is not currently open. The operator must create or resolve an on-chain race.',
   };
 }
+
+export function organizerPresentation({ room, connected, busy = false } = {}) {
+  if (!room || room.demoOnly === true) return {
+    visible: false, open: false, start: false, cancel: false, canOpen: false, canStart: false,
+    help: '',
+  };
+  const phase = room.phase;
+  const chain = room.blockchain || {};
+  const online = Boolean(connected) && !busy;
+  const entrants = Array.isArray(room.entries) ? room.entries.length : 0;
+  const waiting = chain.status === 'waiting' && !['countdown', 'racing'].includes(phase);
+  if (waiting) return {
+    visible: true, open: true, start: false, cancel: false,
+    canOpen: online, canStart: false,
+    help: busy ? 'Waiting for your MetaMask transaction…' :
+      'Open submissions: connect the V2 contract owner wallet and approve Create Race in MetaMask.',
+  };
+  if (phase === 'lobby' && chain.status === 'open') return {
+    visible: true, open: false, start: true, cancel: true,
+    canOpen: false, canStart: online && chain.synced === true && entrants >= 2,
+    help: busy ? 'Waiting for your MetaMask transaction…' :
+      !chain.synced ? 'Verifying paid entries on Monad Testnet. Race start is locked until synchronized.' :
+      entrants < 2 ? 'Submissions OPEN · ' + entrants + ' confirmed racer(s). Need at least two to start.' :
+      'Submissions OPEN · ' + entrants + ' verified racers. Enter the operator PIN and click START RACE.',
+  };
+  if (phase === 'countdown' || phase === 'racing') return {
+    visible: true, open: false, start: false, cancel: false,
+    canOpen: false, canStart: false,
+    help: phase === 'countdown' ?
+      'Entries closed. The server-controlled ten-second countdown is running.' :
+      'Race in progress. The server determines the winner and settles first place automatically.',
+  };
+  if (phase === 'finished') return {
+    visible: true, open: false, start: false, cancel: false,
+    canOpen: false, canStart: false,
+    help: 'Race finished. Await settlement and the next on-chain race.',
+  };
+  return {
+    visible: true, open: false, start: false, cancel: false,
+    canOpen: false, canStart: false,
+    help: chain.status === 'error' || chain.status === 'interrupted' ?
+      'On-chain registration is unavailable. Resolve sync/settlement or cancel/refund safely; do not send payments.' :
+      'Waiting for the Monad Testnet race state. No registrations can open yet.',
+  };
+}
