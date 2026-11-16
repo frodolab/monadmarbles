@@ -38,9 +38,9 @@ const showError = error => {
   // An error is actionable; do not silently swallow rejected wallet payments.
   window.alert(message);
 };
-const hasEntry = () => Boolean(room?.entries?.some(entry =>
-  entry.wallet?.toLowerCase() === wallet?.toLowerCase() ||
-  (entry.nickname === short(wallet || '0x0000000000000000000000000000000000000000'))));
+const hasEntry = () => Boolean(wallet && room?.entries?.some(entry =>
+  (entry.wallet && entry.wallet.toLowerCase() === wallet.toLowerCase()) ||
+  entry.nickname === short(wallet)));
 // EIP-1193 single-flight: one wallet permission request at a time.
 // eth_accounts is silent; only eth_requestAccounts opens a new approval prompt.
 const getMetaMaskProvider = () => {
@@ -152,7 +152,7 @@ ui.fill = async (pin, count) => {
     notify('Added free preview racers');
     return true;
   }
-  catch (error) { notify(error.message); return false; }
+  catch (error) { showError(error); return false; }
 };
 ui.start = async pin => {
   try {
@@ -168,14 +168,14 @@ ui.start = async pin => {
     notify(isPaid() ? 'On-chain entries locked and confirmed · synchronized ten-second countdown' :
       'Server accepted start · synchronized ten-second countdown');
     return true;
-  } catch (error) { notify(error.message); return false; }
+  } catch (error) { showError(error); return false; }
 };
 ui.reset = async pin => {
   try {
     if (isPaid()) throw new Error('Paid races cannot be reset. Use on-chain cancellation/refunds.');
     await ack('lobby:reset', { pin }); return true;
   }
-  catch (error) { notify(error.message); return false; }
+  catch (error) { showError(error); return false; }
 };
 ui.connectWallet = connectWallet;
 
@@ -183,7 +183,7 @@ document.querySelectorAll('[data-wallet]').forEach(button => {
   if (button.dataset.wallet !== 'MetaMask') button.style.display = 'none';
   else button.onclick = async () => {
     try { await connectWallet(); document.getElementById('walletModal').classList.remove('open'); }
-    catch (error) { notify(error.message); }
+    catch (error) { showError(error); }
   };
 });
 const walletTitle = document.querySelector('#walletTitle');
@@ -192,7 +192,7 @@ const disclaimer = document.querySelector('.wallet-disclaimer');
 if (disclaimer) disclaimer.textContent = 'SANDBOX · CONNECT REAL METAMASK · NO ENTRY TRANSACTION';
 document.querySelector('.footer').textContent = 'V27 INTEGRATION SANDBOX · SHARED SERVER · NO ON-CHAIN ENTRY OR PAYOUT';
 document.querySelector('.mock-note').textContent = 'FREE SANDBOX';
-document.getElementById('join').textContent = '✦ CONNECT & JOIN PREVIEW ✦';
+document.getElementById('join').textContent = 'JOIN THE RACE';
 document.getElementById('join').onclick = join;
 const start = document.getElementById('start');
 start.textContent = '▶ START RACE';
@@ -388,7 +388,7 @@ socket.on('race:snapshot', frame => {
 socket.on('race:result', result => {
   if (room && result.raceId === room.raceId) ui.setOfficialResult(result);
 });
-socket.on('race:error', error => notify(error));
+socket.on('race:error', error => showError(error));
 
 renderLiveControls();
 export { socket };
