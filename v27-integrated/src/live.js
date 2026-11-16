@@ -68,6 +68,9 @@ const getMetaMaskProvider = () => {
   return candidates.find(candidate => candidate?.isMetaMask) || (injected?.isMetaMask ? injected : null);
 };
 let connectInFlight = null;
+// Nickname approvals are optional. Reuse a signature if the server request
+// fails and the player retries the exact same name for the exact same entry.
+const nicknameSignatures = new Map();
 const connectWallet = async () => {
   if (connectInFlight) return connectInFlight;
   const provider = getMetaMaskProvider();
@@ -106,6 +109,22 @@ getMetaMaskProvider()?.on?.('accountsChanged', accounts => {
   renderLiveControls();
 });
 getMetaMaskProvider()?.on?.('chainChanged', () => notify('Wallet network changed; switch to Monad Testnet'));
+
+// Restore a previously authorized account without opening an approval popup.
+// eth_accounts is a silent read: NEVER call eth_requestAccounts on page load.
+async function restoreWalletSilently() {
+  const provider = getMetaMaskProvider();
+  if (!provider?.request || wallet || connectInFlight) return;
+  try {
+    const accounts = await provider.request({ method: 'eth_accounts' });
+    if (!Array.isArray(accounts) || !/^0x[0-9a-f]{40}$/i.test(String(accounts[0] || ''))) return;
+    if (wallet || connectInFlight) return; // A manual connection may have completed.
+    wallet = accounts[0];
+    ui.setWallet(wallet);
+    ui.applyRoom(room, wallet);
+    renderLiveControls();
+  } catch { /* Wallet is locked or unavailable; no user prompt on page load. */ }
+}
 
 const paid = createPaidIntegration({
   getRoom: () => room,
@@ -220,9 +239,15 @@ ui.saveNickname = async rawValue => {
       raceId, txHash: entry.txHash, nickname,
       contractAddress: room.blockchain.contractAddress,
     });
-    const signature = await provider.request({
-      method: 'personal_sign', params: [message, wallet],
-    });
+    const signatureKey = wallet.toLowerCase() + ':' + raceId + ':' +
+      entry.txHash.toLowerCase() + ':' + nickname;
+    let signature = nicknameSignatures.get(signatureKey);
+    if (!signature) {
+      signature = await provider.request({ method: 'personal_sign', params: [message, wallet] });
+      if (/^0x[0-9a-f]{130}$/i.test(String(signature || ''))) {
+        nicknameSignatures.set(signatureKey, signature);
+      }
+    }
     if (!/^0x[0-9a-f]{130}$/i.test(String(signature || ''))) {
       throw new Error('MetaMask did not return a valid nickname signature.');
     }
@@ -282,7 +307,7 @@ document.querySelectorAll('[data-wallet]').forEach(button => {
 const walletTitle = document.querySelector('#walletTitle');
 if (walletTitle) walletTitle.textContent = 'CONNECT METAMASK · PREVIEW';
 const disclaimer = document.querySelector('.wallet-disclaimer');
-if (disclaimer) disclaimer.textContent = 'SANDBOX · CONNECT REAL METAMASK · NO ENTRY TRANSACTION';
+if (disclaimer) disclaimer.textContent = 'CONNECT: ONE ACCOUNT APPROVAL IF NOT ALREADY AUTHORIZED · NO SIGNATURE ON CONNECT';
 document.querySelector('.footer').textContent = 'V27 INTEGRATION SANDBOX · SHARED SERVER · NO ON-CHAIN ENTRY OR PAYOUT';
 document.querySelector('.mock-note').textContent = 'FREE SANDBOX';
 document.getElementById('join').textContent = 'JOIN THE RACE';
@@ -417,7 +442,7 @@ function renderLiveControls() {
   // A pre-entry nickname is only a draft. After payment is verified, make
   // the required explicit signature action discoverable as SAVE again.
   const nicknameButton = document.getElementById('saveName');
-  if (hasEntry() && nicknameButton?.textContent === 'READY') nicknameButton.textContent = 'SAVE';
+  if (hasEntry() && nicknameButton?.textContent === 'READY') nicknameButton.textContent = 'SIGN NAME (OPTIONAL)';
 
   if (!room) {
     createRaceButton.style.display = 'none';
@@ -453,6 +478,9 @@ function renderLiveControls() {
   document.querySelector('.mock-note').hidden = true;
   document.querySelector('.footer').hidden = true;
 }
+
+// Read existing MetaMask permission once, without prompting the player.
+void restoreWalletSilently();
 
 socket.on('connect', () => { status.textContent = 'Connected · waiting for race state'; renderLiveControls(); });
 socket.on('disconnect', () => { status.textContent = 'Race server reconnecting · wallet remains available'; ui.setConnected(false); renderLiveControls(); });
