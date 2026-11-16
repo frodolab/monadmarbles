@@ -21,6 +21,9 @@ jobs:
       - name: V27 local API tests
         working-directory: v27-integrated
         run: npm run test:security
+      - name: V27 paid lobby and organizer regression tests
+        working-directory: v27-integrated
+        run: node --test tests/lobby-state.test.mjs tests/organizer.test.mjs tests/paid-admission.test.mjs
       - name: Install working race backend
         working-directory: race-server
         run: npm install --no-audit --no-fund
