@@ -333,6 +333,16 @@ function renderLiveControls() {
   standaloneWalletButton.textContent = wallet ?
     '🦊 METAMASK CONNECTED · ' + short(wallet) : '🦊 CONNECT METAMASK';
   if (!room) {
+    // Keep the organizer entry point visible even when Railway is waking up,
+    // so an offline backend never looks like the controls were deleted.
+    organizerPanel.hidden = freeDemo;
+    createRaceButton.hidden = false;
+    createRaceButton.disabled = true;
+    startPaidButton.hidden = true;
+    organizerPinField.hidden = true;
+    cancelRaceButton.hidden = true;
+    organizerHelp.textContent = socket.connected ?
+      'Waiting for Monad Testnet race state…' : 'Connecting to the paid race server…';
     lobbyMessage.textContent = socket.connected ?
       'Waiting for the shared race lobby…' :
       'Connecting to the race server. You can still connect MetaMask.';
