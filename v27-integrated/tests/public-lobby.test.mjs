@@ -25,7 +25,7 @@ test('public lobby displays only JOIN THE RACE / ENTERED RACE and no extra walle
 test('no lobby map selector, purple toast, prize badge or floating HUD is shown',()=>{
   assert.match(html,/#themeTrigger,#currentThemeLabel,#themeMenu,\.race-stage-heading,\.mock-note,\.footer/);
   assert.match(html,/#livePreviewStatus,#onchainSettlementStatus,#mmLobbyNotice,#mmModeSwitch/);
-  assert.match(html,/#walletConnectCta,#mmOrganizerPanel,\.toast,#toast \{display:none!important\}/);
+  assert.match(html,/#walletConnectCta,#mmOrganizerPanel,\.toast,#toast,#playerWallet\{display:none!important\}/);
   assert.doesNotMatch(live,/document\.body\.append\(status\)/);
   assert.doesNotMatch(live,/document\.body\.append\(refundButton\)/);
   assert.doesNotMatch(live,/settlementPanel\.style\.display/);
