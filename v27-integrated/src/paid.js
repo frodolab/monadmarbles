@@ -196,11 +196,26 @@ export function createPaidIntegration({ getRoom, getWallet, getProvider, notify,
     });
   }
 
+  async function assertOwnerWallet() {
+    const contract = validateOnchainRoom(getRoom());
+    const wallet = getWallet();
+    if (!wallet || !addressRegex.test(wallet)) {
+      throw new Error('Connect the smart-contract owner\'s MetaMask wallet before opening submissions.');
+    }
+    const owner = await publicClient.readContract({
+      address: contract, abi, functionName: 'owner',
+    });
+    if (String(owner).toLowerCase() !== wallet.toLowerCase()) {
+      throw new Error('This MetaMask address is not the V2 contract owner. Switch to the owner wallet to open or cancel submissions.');
+    }
+  }
+
   async function createRace() {
     return run('create race', async () => {
       const room = getRoom();
       validateOnchainRoom(room);
       if (room.blockchain.status !== 'waiting') throw new Error('A contract race is still active.');
+      await assertOwnerWallet();
       const hash = await send('createRace', [parseEther('0.1'), 48]);
       notify('Creating a 0.1 MON, 48-slot V2 contract race: ' + hash);
       await wait(hash);
@@ -215,6 +230,7 @@ export function createPaidIntegration({ getRoom, getWallet, getProvider, notify,
       validateOnchainRoom(room);
       const raceId = room.blockchain.chainRaceId;
       if (!/^\d+$/.test(String(raceId || ''))) throw new Error('No active on-chain race to cancel.');
+      await assertOwnerWallet();
       const hash = await send('cancelRace', [BigInt(raceId)]);
       notify('Cancellation submitted: ' + hash);
       await wait(hash);
