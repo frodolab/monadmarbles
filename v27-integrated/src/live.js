@@ -223,225 +223,140 @@ instantStart.onclick = async () => {
 };
 document.getElementById('registrationTimer').style.display = 'none';
 const devTitle = document.querySelector('#devModalTitle');
-if (devTitle) devTitle.textContent = 'Sandbox Operator PIN';
+if (devTitle) devTitle.textContent = 'Operator PIN';
 const devHint = document.querySelector('#devModal p');
-if (devHint) devHint.textContent = 'This PIN is validated by the shared race server when starting a preview race.';
-// Organizer actions are always discoverable in the normal V27 paid lobby.
-// Open submissions is a contract-owner MetaMask transaction; starting requires
-// the operator PIN and is enforced independently by the paid race server.
-// Neither action authorizes or initiates a winner payout in the browser.
-const organizerPanel = document.getElementById('mmOrganizerPanel');
-const organizerHelp = document.getElementById('mmOrganizerHelp');
-const organizerPin = document.getElementById('mmOperatorPin');
-const organizerPinField = document.getElementById('mmPinField');
-const createRaceButton = document.getElementById('mmOpenLobby');
-const startPaidButton = document.getElementById('mmStartRace');
-const cancelRaceButton = document.getElementById('mmCancelRace');
-let organizerActionBusy = false;
+if (devHint) devHint.textContent = 'Unlock race creation, cancellation and PIN-authorized start.';
+
+const controls = document.querySelector('.devbuttons');
+// All organizer actions are INSIDE the PIN-locked V27 devbox. No controls,
+// status labels or wallet connect buttons appear elsewhere on the homepage.
+const createRaceButton = document.createElement('button');
+createRaceButton.type = 'button';
+createRaceButton.id = 'createPaidRace';
+createRaceButton.textContent = '＋ OPEN SUBMISSIONS';
+controls.append(createRaceButton);
+
+const cancelRaceButton = document.createElement('button');
+cancelRaceButton.type = 'button';
+cancelRaceButton.id = 'cancelPaidRace';
+cancelRaceButton.textContent = 'CANCEL RACE';
+controls.append(cancelRaceButton);
+
+const operatorHelp = document.createElement('span');
+operatorHelp.id = 'mmOperatorHelp';
+operatorHelp.style.cssText = 'display:block;grid-column:1 / -1;font-size:10px;font-weight:800;color:#ffebac;line-height:1.2';
+controls.append(operatorHelp);
+
+const payoutLink = document.createElement('a');
+payoutLink.id = 'mmOperatorPayout';
+payoutLink.style.cssText = 'display:none;grid-column:1 / -1;font-size:10px;font-weight:900;color:#ffe28e;text-align:center;text-decoration:underline';
+payoutLink.target = '_blank';
+payoutLink.rel = 'noopener noreferrer';
+payoutLink.textContent = 'View payout on Monad Explorer';
+controls.append(payoutLink);
+
+let operatorActionBusy = false;
+const operationError = error => {
+  operatorHelp.textContent = String(error?.message || error || 'Operator action failed');
+  showError(error);
+};
 
 createRaceButton.onclick = async () => {
-  if (organizerActionBusy || paid.busy) return;
-  organizerActionBusy = true;
-  organizerHelp.textContent = 'Connecting the contract owner and preparing Create Race…';
+  if (operatorActionBusy || paid.busy || !socket.connected) return;
+  operatorActionBusy = true;
+  operatorHelp.textContent = 'Preparing the on-chain race in MetaMask…';
   renderLiveControls();
   try {
     if (!wallet) await connectWallet();
     await paid.createRace();
-    organizerHelp.textContent = 'Race creation confirmed. Waiting for on-chain registrations to open…';
+    operatorHelp.textContent = 'Create Race confirmed. Waiting for verified on-chain registration to open…';
   } catch (error) {
-    const message = error?.message || 'Could not open on-chain registration';
-    organizerHelp.textContent = message;
-    notify(message);
+    operationError(error);
   } finally {
-    organizerActionBusy = false;
+    operatorActionBusy = false;
     renderLiveControls();
   }
 };
-
-startPaidButton.onclick = async () => {
-  if (organizerActionBusy || paid.busy || !isPaid()) return;
-  const pin = organizerPin.value.trim() || ui.getOperatorPin();
-  if (!pin) {
-    organizerHelp.textContent = 'Enter the backend OPERATOR_PIN above to start the race.';
-    organizerPin.focus();
-    return;
-  }
-  organizerActionBusy = true;
-  organizerHelp.textContent = 'Closing on-chain entries and verifying participants. The server will start the ten-second countdown…';
-  renderLiveControls();
-  try {
-    const started = await ui.start(pin);
-    if (started) {
-      organizerPin.value = '';
-      organizerHelp.textContent = 'Registration closed on-chain. The synchronized ten-second countdown will begin.';
-    } else {
-      organizerHelp.textContent = 'Start was rejected. Verify the operator PIN, entrants and blockchain state.';
-    }
-  } finally {
-    organizerActionBusy = false;
-    renderLiveControls();
-  }
-};
-
 cancelRaceButton.onclick = async () => {
-  if (organizerActionBusy || paid.busy || !isPaid()) return;
-  if (!window.confirm('Cancel this REAL Monad Testnet race? Entrants must claim their own refunds.')) return;
-  organizerActionBusy = true;
-  organizerHelp.textContent = 'Waiting for owner-authorized cancellation transaction…';
+  if (operatorActionBusy || paid.busy || !socket.connected) return;
+  if (!window.confirm('Cancel the real on-chain race? Paid entrants must claim their own refunds.')) return;
+  operatorActionBusy = true;
   renderLiveControls();
   try {
     if (!wallet) await connectWallet();
     await paid.cancelRace();
-    organizerHelp.textContent = 'Race canceled. Entrants can claim refunds from the contract.';
+    operatorHelp.textContent = 'Race cancelled. Entrants may claim refunds through the dedicated refund page.';
   } catch (error) {
-    const message = error?.message || 'Could not cancel contract race';
-    organizerHelp.textContent = message;
-    notify(message);
+    operationError(error);
   } finally {
-    organizerActionBusy = false;
+    operatorActionBusy = false;
     renderLiveControls();
   }
 };
 
-const pendingButton = document.createElement('button');
-pendingButton.type = 'button';
-pendingButton.id = 'checkPendingPaidEntry';
-pendingButton.className = 'btn yellow';
-pendingButton.style.cssText = 'display:none;margin:4px auto;max-width:320px;font-size:12px;';
-pendingButton.textContent = 'CHECK PENDING ON-CHAIN PAYMENT';
-pendingButton.onclick = async () => {
-  try { await paid.checkPayment(); }
-  catch (error) { notify(error.message || 'Could not confirm existing payment'); }
-};
-document.querySelector('.bowl-wrap').append(pendingButton);
+// Refund claims are an entrant right, never restricted by the operator PIN.
+// They remain available via ?refund=1, not as a floating public lobby box.
+const refundRoute = new URLSearchParams(location.search).get('refund') === '1';
+if (refundRoute) {
+  const claim = document.createElement('button');
+  claim.textContent = 'CLAIM CANCELED-RACE REFUND';
+  claim.type = 'button';
+  claim.style.cssText = 'position:fixed;bottom:15px;left:50%;transform:translateX(-50%);z-index:350;padding:12px 18px;border-radius:12px;font-weight:900';
+  claim.onclick = async () => {
+    const raceId = window.prompt('Canceled on-chain race ID:');
+    if (raceId === null) return;
+    try {
+      if (!wallet) await connectWallet();
+      await paid.claimRefund(raceId.trim());
+    } catch (error) {
+      showError(error);
+    }
+  };
+  document.body.append(claim);
+}
 
-const refundButton = document.createElement('button');
-refundButton.type = 'button';
-refundButton.id = 'claimPaidRefund';
-refundButton.style.cssText = 'display:none;position:fixed;right:14px;bottom:14px;z-index:330;padding:6px 10px;border-radius:10px;';
-refundButton.textContent = 'Claim canceled-race refund';
-refundButton.onclick = async () => {
-  const raceId = window.prompt('Numeric ID of the canceled Monad Testnet race to refund:');
-  if (raceId === null) return;
-  try {
-    if (!wallet) await connectWallet();
-    await paid.claimRefund(raceId.trim());
-  } catch (error) { notify(error.message || 'Refund claim failed'); }
-};
-document.body.append(refundButton);
-
-const settlementPanel = document.createElement('div');
-settlementPanel.id = 'onchainSettlementStatus';
-settlementPanel.style.cssText = 'display:none;position:fixed;bottom:44px;right:12px;z-index:325;background:#252054ee;color:white;border:1px solid #a399ef;border-radius:12px;padding:10px 14px;max-width:340px;font:700 12px Nunito,sans-serif;';
-document.body.append(settlementPanel);
 function renderLiveControls() {
-  standaloneWalletButton.textContent = wallet ?
-    '🦊 METAMASK CONNECTED · ' + short(wallet) : '🦊 CONNECT METAMASK';
+  const joinButton = document.getElementById('join');
+  // EXACT user-approved wording. Never replace it with a status or wallet CTA.
+  joinButton.textContent = hasEntry() ? 'ENTERED RACE' : 'JOIN THE RACE';
+  // A user must always be able to initiate an identity-only wallet connection
+  // even before the contract owner creates a race.
+  joinButton.disabled = hasEntry() || waitingToJoin || paid.busy;
+
   if (!room) {
-    // Keep the organizer entry point visible even when Railway is waking up,
-    // so an offline backend never looks like the controls were deleted.
-    organizerPanel.hidden = freeDemo;
-    createRaceButton.hidden = false;
-    createRaceButton.disabled = true;
-    startPaidButton.hidden = true;
-    organizerPinField.hidden = true;
-    cancelRaceButton.hidden = true;
-    organizerHelp.textContent = socket.connected ?
-      'Waiting for Monad Testnet race state…' : 'Connecting to the paid race server…';
-    lobbyMessage.textContent = socket.connected ?
-      'Waiting for the shared race lobby…' :
-      'Connecting to the race server. You can still connect MetaMask.';
-    document.getElementById('join').disabled = true;
+    createRaceButton.style.display = 'none';
+    cancelRaceButton.style.display = 'none';
+    start.disabled = true;
+    start.style.display = '';
+    operatorHelp.textContent = 'Connecting to race server…';
     return;
   }
   const paying = isPaid();
-  const organizerView = organizerPresentation({
-    room, connected: socket.connected, busy: organizerActionBusy || paid.busy,
+  const organizer = organizerPresentation({
+    room, connected: socket.connected, busy: operatorActionBusy || paid.busy,
   });
-  organizerPanel.hidden = !organizerView.visible;
-  createRaceButton.hidden = !organizerView.open;
-  createRaceButton.disabled = !organizerView.canOpen;
-  startPaidButton.hidden = !organizerView.start;
-  startPaidButton.disabled = !organizerView.canStart;
-  organizerPinField.hidden = !organizerView.start;
-  cancelRaceButton.hidden = !organizerView.cancel;
-  cancelRaceButton.disabled = !socket.connected || paid.busy || organizerActionBusy;
-  // Preserve helpful action-specific errors instead of immediately overwriting
-  // them with a generic status while an on-chain transaction is still pending.
-  if (!organizerActionBusy) organizerHelp.textContent = organizerView.help;
   document.getElementById('addOne').style.display = paying ? 'none' : '';
   document.getElementById('addTen').style.display = paying ? 'none' : '';
   instantStart.style.display = paying ? 'none' : '';
-  const payment = paid.pending;
-  pendingButton.style.display = paying && payment ? '' : 'none';
-  pendingButton.disabled = paid.busy;
-  refundButton.style.display = paying ? '' : 'none';
-  const paidFee = formatWei(room.blockchain?.entryFeeWei);
-  const feeLabel = paidFee === '?' ? 'TESTNET MON' : paidFee + ' TESTNET MON';
-  const joined = hasEntry();
-  const joinButton = document.getElementById('join');
-  const view = lobbyPresentation({
-    room, connected:socket.connected, hasWallet:Boolean(wallet), joined,
-    pending:paying&&paid.matchesPending(), busy:paid.busy,
-    feeLabel, ready:!paying||ui.joinReady(),
-  });
-  joinButton.textContent = view.joinLabel;
-  joinButton.disabled = view.joinDisabled;
-  lobbyMessage.textContent = view.message;
-  document.getElementById('walletTitle').textContent = paying ? 'CONNECT METAMASK · MONAD TESTNET' :
-    'CONNECT METAMASK · FREE PREVIEW';
-  document.querySelector('.wallet-disclaimer').textContent = paying ?
-    'CONFIRM AN ON-CHAIN PAYMENT IN METAMASK. TESTNET MON GOES TO THE V2 CONTRACT, NEVER TO THIS SERVER.' :
-    'FREE SANDBOX · META MASK CONNECTION ONLY · NO ENTRY PAYMENT';
-  document.querySelector('.mock-note').textContent = paying ? 'MONAD TESTNET' : 'FREE SANDBOX';
-  document.querySelector('.footer').textContent = paying ?
-    'MONAD TESTNET · V27 AUTHORITATIVE TRACK · V2 VERIFIED ENTRY & AUTOMATIC FIRST-PLACE PAYOUT' :
-    'V27 SANDBOX · FREE ENTRIES · NO ON-CHAIN PAYOUTS';
-  settlementPanel.style.display = paying ? '' : 'none';
-  if (paying) {
-    settlementPanel.replaceChildren();
-    const line = document.createElement('div');
-    const status = room.payout;
-    const chain = room.blockchain;
-    const phase = status?.status || 'waiting';
-    line.textContent = 'TESTNET · ' + (chain?.status || room.phase).toUpperCase() +
-      ' · POOL ' + ui.poolDisplay() + ' MON' +
-      (status?.enabled ? ' · PAYOUT ' + phase.toUpperCase() : '');
-    settlementPanel.append(line);
-    const latestTx = testnetExplorerTx(status?.txHash || payment?.txHash);
-    if (latestTx) {
-      const a = document.createElement('a');
-      a.href = latestTx;
-      a.target = '_blank'; a.rel = 'noopener noreferrer';
-      a.style.color = '#ead393';
-      a.textContent = status?.txHash ? 'VIEW WINNER PAYOUT TRANSACTION' : 'VIEW PENDING ENTRY TRANSACTION';
-      settlementPanel.append(a);
-    }
-    if (status?.error) {
-      const warning = document.createElement('div');
-      warning.textContent = 'Settlement issue: ' + status.error;
-      settlementPanel.append(warning);
-    }
-    if (chain?.status === 'error') {
-      const warning = document.createElement('div');
-      warning.textContent = 'Chain synchronization unavailable. Payments/start locked.';
-      settlementPanel.append(warning);
-    }
-  }
-}
 
-const standaloneWalletButton = document.getElementById('walletConnectCta');
-const lobbyMessage = document.getElementById('mmLobbyNotice');
-const modeSwitch = document.getElementById('mmModeSwitch');
-modeSwitch.href = freeDemo ? '/' : '/?demo=1';
-modeSwitch.textContent = freeDemo ? 'Switch to paid Monad Testnet races' : 'Want bots? Open the free demo (no MON)';
-standaloneWalletButton.onclick = async () => {
-  try { await connectWallet(); }
-  catch (error) { notify(error.message || 'Could not connect MetaMask'); }
-  finally { renderLiveControls(); }
-};
-const connectTop = document.getElementById('connectWallet');
-if (connectTop) connectTop.onclick = () => document.getElementById('walletModal').classList.add('open');
+  createRaceButton.style.display = paying && organizer.open ? '' : 'none';
+  createRaceButton.disabled = !organizer.canOpen;
+  cancelRaceButton.style.display = paying && organizer.cancel ? '' : 'none';
+  cancelRaceButton.disabled = !socket.connected || operatorActionBusy || paid.busy;
+  start.style.display = paying && !organizer.start ? 'none' : '';
+  start.textContent = '▶ START RACE';
+  start.disabled = paying ? !organizer.canStart :
+    !socket.connected || room.phase !== 'lobby' || room.entries.length < 2;
+  if (!operatorActionBusy) operatorHelp.textContent = organizer.help;
+
+  const payoutUrl = paying ? testnetExplorerTx(room.payout?.txHash) : null;
+  payoutLink.style.display = payoutUrl ? '' : 'none';
+  if (payoutUrl) payoutLink.href = payoutUrl;
+
+  // Keep the verified pool and selected marble visible without secondary badges.
+  document.querySelector('.mock-note').hidden = true;
+  document.querySelector('.footer').hidden = true;
+}
 
 socket.on('connect', () => { status.textContent = 'Connected · waiting for race state'; renderLiveControls(); });
 socket.on('disconnect', () => { status.textContent = 'Race server reconnecting · wallet remains available'; ui.setConnected(false); renderLiveControls(); });
