@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateOnchainRoom, formatWei, testnetExplorerTx } from '../src/paid.js';
+import { validateOnchainRoom, formatWei, testnetExplorerTx, registrationMessage } from '../src/paid.js';
 
 const address='0xa8149453bbd015a470bcd0fa572ea154aeb6c869';
 const room={
@@ -34,4 +34,20 @@ test('wei displays the actual contract pool and not a hardcoded .1 fee',()=>{
 test('only canonical tx hash produces blockchain explorer URL',()=>{
   assert.equal(testnetExplorerTx('0x'+'a'.repeat(64)),'https://testnet.monadexplorer.com/tx/0x'+'a'.repeat(64));
   assert.equal(testnetExplorerTx('javascript:alert(1)'),null);
+});
+
+test('a saved nickname uses the exact EIP-191 message verified by the server',()=>{
+  const tx='0x'+'A'.repeat(64);
+  const message=registrationMessage({
+    raceId:'2',txHash:tx,nickname:'Marble King',contractAddress:address.toUpperCase().replace(/^0X/,'0x'),
+  });
+  assert.equal(message,[
+    'Monad Marbles Testnet Registration',
+    'Chain: 10143',
+    'Contract: '+address,
+    'Race: 2',
+    'Transaction: '+tx.toLowerCase(),
+    'Nickname: Marble King',
+    'I authorize this nickname to be associated with my verified race entry.',
+  ].join('\\n'));
 });
