@@ -595,7 +595,8 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
    toast notifications or organizer controls outside the PIN-locked devbox. */
 #themeTrigger,#currentThemeLabel,#themeMenu,.race-stage-heading,.mock-note,.footer,.wallet-connected-pill,
 #livePreviewStatus,#onchainSettlementStatus,#mmLobbyNotice,#mmModeSwitch,
-#walletConnectCta,#mmOrganizerPanel,.toast,#toast {display:none!important}
+#walletConnectCta,#mmOrganizerPanel,.toast,#toast,#playerWallet{display:none!important}
+.nickname-field{display:flex!important}
 </style>
 </head>
 <body>
@@ -765,7 +766,7 @@ const connectBtn=$('connectWallet'); if(connectBtn) connectBtn.onclick=()=>openM
 function newMockAddress(){const bytes=new Uint8Array(20);if(window.crypto?.getRandomValues)window.crypto.getRandomValues(bytes);else for(let i=0;i<20;i++)bytes[i]=Math.floor(Math.random()*256);return '0x'+Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('')}
 function shortAddr(a){return a.slice(0,6)+'…'+a.slice(-4)}
 function syncPlayerPreview(){if(!myMarble)return;$('playerWallet').textContent=shortAddr(mockAddress)+'  ·  DEMO';$('walletConnected').textContent='★ '+myMarble.name;$('walletConnected').classList.add('visible')}
-function commitNickname(){if(!myMarble)return;const input=$('nick').value.trim();const proposed=input||shortAddr(mockAddress);if(entrants.some(p=>p!==myMarble&&p.name.toLowerCase()===proposed.toLowerCase())){toast('That nickname is already taken');return}if(finished){toast('Name changes lock when the race begins');return}myMarble.name=proposed;syncPlayerPreview();update();toast('Nickname saved (local demo)')}
+function commitNickname(){if(window.MonadMarblesPreviewBridge?.saveNickname){void window.MonadMarblesPreviewBridge.saveNickname($('nick').value);return;}if(!myMarble)return;const input=$('nick').value.trim();const proposed=input||shortAddr(mockAddress);if(entrants.some(p=>p!==myMarble&&p.name.toLowerCase()===proposed.toLowerCase())){toast('That nickname is already taken');return}if(finished){toast('Name changes lock when the race begins');return}myMarble.name=proposed;syncPlayerPreview();update();toast('Nickname saved (local demo)')}
 $('join').onclick=()=>{if(myMarble){toast('You are already entered');return}if(finished||entrants.length>=60){toast('Registration is closed');return}openModal();toast('Choose a mock wallet to join the race')};
 document.querySelectorAll('[data-wallet]').forEach(btn=>{btn.onclick=()=>{if(myMarble){closeModal();toast('Already joined this race');return}connectedWallet=btn.dataset.wallet;mockAddress=newMockAddress();const defaultName=shortAddr(mockAddress);myMarble=add(defaultName,selected);closeModal();if(!myMarble){toast('The lobby is full');return}$('join').textContent='✓ ENTERED';$('join').classList.add('joined-cta');$('playerEditor').hidden=false;$('nick').placeholder=defaultName;$('nick').value='';syncPlayerPreview();update();toast('Mock wallet signed in — customize your marble below')}});
 $('saveName').onclick=commitNickname;
@@ -1126,7 +1127,7 @@ window.MonadMarblesPreviewBridge={
   myMarble=p||null;
   if(this.liveRoom?.demoOnly===false){
    $('playerEditor').hidden=false;
-   document.querySelector('.nickname-field').style.display='none';
+   document.querySelector('.nickname-field').style.display='flex';
    $('playerWallet').textContent=p?'VERIFIED ON-CHAIN MARBLE · DESIGN LOCKED':
     'CONNECTED: '+shortAddr(address)+' · PICK YOUR MARBLE BEFORE PAYING';
   }else if(p){syncPlayerPreview()}
@@ -1143,7 +1144,10 @@ window.MonadMarblesPreviewBridge={
   }
   // Treat the server roster as EXACTLY authoritative: no stale local
   // entries and no unverified "mock wallet" entries survive synchronization.
-  const incoming=Array.isArray(next.entries)?next.entries:[];
+  // On return, the finalized on-chain result can remain in the server journal,
+  // but its entries belong to the previous round and must disappear from the bowl.
+  const incoming=(next.phase==='finished'&&this.isDismissed(key))?[]:
+    (Array.isArray(next.entries)?next.entries:[]);
   const accepted=new Map(incoming.map(entry=>[entry.id,entry]));
   if(entrants.some(p=>!accepted.has(p.serverId))){
    entrants=entrants.filter(p=>accepted.has(p.serverId));
@@ -1170,15 +1174,20 @@ window.MonadMarblesPreviewBridge={
    mockAddress=wallet;
    if(next.demoOnly===false){
     $('playerEditor').hidden=false;
-    document.querySelector('.nickname-field').style.display='none';
+    document.querySelector('.nickname-field').style.display='flex';
     $('playerWallet').textContent='CONNECTED: '+shortAddr(wallet)+' · PICK YOUR MARBLE BEFORE PAYING';
    }
    myMarble=entrants.find(x=>x.wallet?.toLowerCase()===wallet.toLowerCase() || x.name.toLowerCase()===(wallet.slice(0,6)+'…'+wallet.slice(-4)).toLowerCase())||null;
-   if(myMarble){$('playerEditor').hidden=false;syncPlayerPreview();if(next.demoOnly===false)$('playerWallet').textContent='VERIFIED ON-CHAIN MARBLE · DESIGN LOCKED'}
+   if(myMarble){
+    $('playerEditor').hidden=false;syncPlayerPreview();
+    if(document.activeElement!==$('nick') && !this.isNicknameSaving?.()){
+     $('nick').value=myMarble.name;
+    }
+   }
   }
   const isLobby=next.phase==='lobby';
   const isCountdown=next.phase==='countdown';
-  if((next.phase==='waiting'||isLobby)&&!raceActive&&!raceTransitioning){
+  if((next.phase==='waiting'||isLobby || (next.phase==='finished'&&this.isDismissed(key)))&&!raceActive&&!raceTransitioning){
    // One source of truth: stale local 90-second timer must not close registrations.
    running=false;finished=false;preRaceActive=false;
    stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;
