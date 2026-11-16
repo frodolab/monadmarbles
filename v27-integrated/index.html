@@ -787,7 +787,7 @@ $('join').onclick=()=>{if(myMarble){toast('You are already entered');return}if(f
 document.querySelectorAll('[data-wallet]').forEach(btn=>{btn.onclick=()=>{if(myMarble){closeModal();toast('Already joined this race');return}connectedWallet=btn.dataset.wallet;mockAddress=newMockAddress();const defaultName=shortAddr(mockAddress);myMarble=add(defaultName,selected);closeModal();if(!myMarble){toast('The lobby is full');return}$('join').textContent='✓ ENTERED';$('join').classList.add('joined-cta');$('playerEditor').hidden=false;$('nick').placeholder=defaultName;$('nick').value='';syncPlayerPreview();update();toast('Mock wallet signed in — customize your marble below')}});
 $('saveName').onclick=commitNickname;
 $('nick').addEventListener('keydown',e=>{if(e.key==='Enter')commitNickname()});
-$('nick').addEventListener('input',()=>{$('saveName').textContent='SAVE'});
+$('nick').addEventListener('input',()=>{$('saveName').textContent=(myMarble&&window.MonadMarblesPreviewBridge?.liveRoom?.demoOnly===false)?'SIGN NAME (OPTIONAL)':'SAVE'});
 function bot(count){if(finished||preRaceActive)return;let added=0;for(let i=0;i<count;i++){if(!add('Bot '+String(idCounter+1).padStart(2,'0'),Math.floor(Math.random()*colors.length)))break;added++}if(added)toast(added+' bot'+(added===1?'':'s')+' added')};$('addOne').onclick=async()=>{if(await authorizedDevAction('bot:add',{count:1}))bot(1)};$('addTen').onclick=async()=>{if(await authorizedDevAction('bot:add',{count:10}))bot(10)};
 
 // The server alone starts the ten-second countdown after the operator PIN.
