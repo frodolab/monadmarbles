@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080d17" />
+    <meta name="description" content="Autonomous lunar rover simulation and Monad testnet discovery ledger" />
+    <title>SELENE / Autonomous Lunar Ice Scout</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-icon" aria-hidden="true"><span class="brand-moon"></span><span class="brand-orbit"></span></div>
+          <div><div class="brand-kicker">LUNAR EXPLORATION SYSTEMS</div><div class="brand-name">SELENE <span class="brand-version">/ ICE SCOUT 01</span></div></div>
+        </div>
+        <div class="topbar-center"><span class="status-led"></span><span id="system-status">AUTONOMOUS NAVIGATION ONLINE</span></div>
+        <div class="topbar-actions"><span class="network-pill"><span class="network-dot"></span> MONAD TESTNET</span><button id="wallet-button" class="wallet-button"><span class="wallet-icon">⬡</span> CONNECT WALLET</button></div>
+      </header>
+
+      <main class="dashboard">
+        <section class="viewport" aria-label="3D lunar rover simulation">
+          <div id="scene" class="scene"></div>
+          <div class="viewport-gradient"></div>
+          <div class="scene-top-left">
+            <div class="eyebrow"><span class="small-green-dot"></span> LIVE SIMULATION <span class="eyebrow-divider">/</span> SOUTH POLAR SECTOR</div>
+            <div class="scene-title">EXPLORATION <span>IN PROGRESS</span></div>
+            <div class="scene-subtitle">MISSION 01 <span>·</span> AUTONOMOUS ICE PROSPECTING</div>
+          </div>
+          <div class="scene-top-right">
+            <div class="mode-label">NAVIGATION MODE</div>
+            <div class="auto-active"><span class="auto-pulse"></span> AUTO PILOT <span class="auto-check">✓</span></div>
+            <div id="avoid-label" class="avoid-label">PATH CLEAR · ROUTE OPTIMIZED</div>
+          </div>
+          <div class="scanning-reticle" aria-hidden="true"><span></span><span></span><span></span><span></span><i></i></div>
+          <div class="scene-left-center"><div class="vertical-label">CAM-01  /  REAR FOLLOW</div><div class="camera-line"></div></div>
+          <div class="viewport-bottom-left">
+            <div class="live-readout"><span class="readout-dot"></span> LiDAR SCANNING <span class="live-brackets">[ ACTIVE ]</span></div>
+            <div class="readout-secondary"><span>OBSTACLE AVOIDANCE <b>ENABLED</b></span><span>ICE SPECTROMETER <b>ONLINE</b></span></div>
+          </div>
+          <div class="viewport-bottom-right"><span class="view-chip">◉</span> CHASE CAMERA <span class="view-separator">/</span> 3D VIEW</div>
+          <div id="mission-banner" class="mission-banner hidden"><strong>MISSION COMPLETE</strong><span>Target deposits mapped. Explore again to restart.</span></div>
+          <div id="toast" class="toast hidden" role="status"></div>
+        </section>
+
+        <aside class="sidebar">
+          <div class="side-heading"><span>MISSION TELEMETRY</span><span class="side-heading-id">001 / LIVE</span></div>
+          <div class="primary-metric"><div class="metric-icon">✳</div><div><div class="metric-label">ICE DEPOSITS MAPPED</div><div class="metric-big"><span id="deposit-count">00</span><span class="metric-outof">/ <span id="deposit-target">08</span></span></div></div></div>
+          <div class="progress-bar"><div id="deposit-progress"></div></div>
+          <div class="metric-grid"><div class="mini-metric"><div class="metric-label">SECTOR COVERAGE</div><div class="metric-number"><span id="coverage">0.0</span><small>%</small></div></div><div class="mini-metric"><div class="metric-label">DISTANCE TRAVELED</div><div class="metric-number"><span id="distance">0.00</span><small>KM</small></div></div><div class="mini-metric"><div class="metric-label">SIM ROVER VELOCITY</div><div class="metric-number"><span id="velocity">0.0</span><small>U/S</small></div></div><div class="mini-metric"><div class="metric-label">CRATERS AVOIDED</div><div class="metric-number"><span id="avoid-count">00</span><small></small></div></div></div>
+          <div class="panel-divider"></div>
+          <div class="section-label"><span>⊞</span> TACTICAL OVERVIEW <span class="faded">LIVE</span></div>
+          <div class="map-frame"><canvas id="minimap" width="620" height="410" aria-label="Moving overhead minimap"></canvas><div class="map-tag">LOCAL NAV MAP <span>·</span> FOLLOW</div><div class="map-zoom">↗ <span>1:2500</span></div></div>
+          <div class="map-legend"><span><i class="legend-rover"></i> ROVER</span><span><i class="legend-track"></i> PATH</span><span><i class="legend-danger"></i> CRATER</span><span><i class="legend-ice"></i> ICE</span></div>
+          <div class="panel-divider"></div>
+          <div class="section-label"><span>⌁</span> DISCOVERY & BLOCKCHAIN LOG <span class="faded">MONAD</span></div>
+          <div class="chain-row"><span class="chain-status"><i id="chain-dot"></i><span id="chain-label">LOCAL SIMULATION</span></span><span id="chain-count">0 ON-CHAIN</span></div>
+          <div id="events" class="event-list"><div class="event-empty"><div class="empty-icon">◇</div><strong>NO DEPOSITS LOGGED</strong><span>Autonomous scan is running.<br/>Discoveries will appear here.</span></div></div>
+          <div class="chain-controls"><label for="contract-address">REGISTRY CONTRACT ADDRESS</label><div class="contract-input-wrap"><input id="contract-address" type="text" spellcheck="false" placeholder="0x... (after deployment)" aria-label="Contract address"/><button id="save-contract" title="Use this contract address">SET</button></div><label class="toggle-row" for="onchain-toggle"><span>AUTO-QUEUE ON-CHAIN MARKERS <small>MetaMask approval required for each transaction</small></span><input type="checkbox" id="onchain-toggle"/><span class="toggle-track"></span></label></div>
+        </aside>
+
+        <section class="bottom-controls" aria-label="Simulation controls">
+          <div class="control-section transport-controls"><div class="control-heading">SIMULATION CONTROL</div><div class="control-buttons"><button id="play-pause" class="play-button" aria-label="Pause simulation">❚❚</button><button id="restart" class="round-button" aria-label="Restart mission" title="Restart mission">↺</button><div class="time-group"><div class="control-label">ELAPSED TIME</div><div id="elapsed" class="mono-value">00:00:00</div></div></div></div>
+          <div class="control-section speed-controls"><div class="control-heading">PLAYBACK SPEED</div><div class="speed-buttons"><button class="speed-btn" data-speed="0.5">0.5×</button><button class="speed-btn active" data-speed="1">1×</button><button class="speed-btn" data-speed="2">2×</button><button class="speed-btn" data-speed="4">4×</button><button class="speed-btn" data-speed="8">8×</button></div></div>
+          <div class="control-section capture-controls"><div class="control-heading">MISSION CAPTURE</div><div class="capture-actions"><button id="record" class="record-button"><span class="record-dot"></span> RECORD VIDEO</button><button id="view-toggle" class="view-button" title="Toggle elevated camera view">◈ VIEW</button></div></div>
+          <div class="control-section mission-state"><div class="control-heading">MISSION STATUS</div><div id="mission-state" class="mission-state-value"><i></i> EXPLORING SECTOR</div><div class="sector-name">82.4°S – 87.0°S / SYNTHETIC TEST TERRAIN</div></div>
+        </section>
+      </main>
+      <footer class="footer"><span>SELENE AUTONOMOUS EXPLORATION SYSTEM <span class="muted">© DEMONSTRATION / SYNTHETIC DATA ONLY</span></span><span>SIMULATION ENVIRONMENT <b>·</b> POWERED BY <strong>MONAD</strong></span></footer>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
