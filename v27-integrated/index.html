@@ -598,6 +598,20 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
 #walletConnectCta,#mmOrganizerPanel,.toast,#toast,#playerWallet{display:none!important}
 .nickname-field{display:flex!important}
 #playerEditor[hidden]{display:none!important}
+.game-sound-toggle{
+  position:fixed;top:14px;right:14px;z-index:385;
+  width:36px;height:36px;display:grid;place-items:center;
+  border:1px solid #fff6c8b0;border-radius:50%;
+  background:#29205ab8;color:#fff;padding:0;
+  font-size:18px;line-height:1;cursor:pointer;
+  opacity:.78;transition:opacity .16s ease,background .16s ease;
+  box-shadow:0 2px 8px #241e5033;
+}
+.game-sound-toggle:hover,.game-sound-toggle:focus-visible{
+  opacity:1;background:#33276f;
+}
+.game-sound-toggle:focus-visible{outline:2px solid #ffe082;outline-offset:2px}
+@media(prefers-reduced-motion:reduce){.game-sound-toggle{transition:none}}
 </style>
 </head>
 <body>
@@ -670,7 +684,8 @@ body:has(.race-transition:not([hidden])) .toast{display:none!important}
 
 <div class="hidden-integration" aria-hidden="true"><div id="pop"></div><div id="feed"></div></div>
 <div class="footer">MONAD MARBLES · CANDY CIRCUIT · LOCAL FRONTEND CONCEPT · NOT CONNECTED TO BLOCKCHAIN</div></div></div><div class="toast" id="toast"></div>
-<button type="button" id="devAccess" class="dev-access" aria-haspopup="dialog">🔒 Dev Access</button><span class="dev-mode-indicator" id="devIndicator">⚙ DEV MODE</span>
+<button type="button" id="devAccess" class="dev-access" aria-haspopup="dialog">🔒 Dev Access</button>
+<button type="button" id="gameSoundToggle" class="game-sound-toggle" aria-label="Mute game sound" aria-pressed="true" title="Mute game sound">🔊</button><span class="dev-mode-indicator" id="devIndicator">⚙ DEV MODE</span>
 <div class="dev-modal-overlay" id="devModal" aria-hidden="true"><div class="dev-modal" role="dialog" aria-modal="true" aria-labelledby="devModalTitle"><h2 id="devModalTitle">Developer Access</h2><p>Enter the operator PIN to unlock testing tools for this page only.</p><form id="devForm"><label for="devPin">PIN</label><input id="devPin" type="password" required autocomplete="off" placeholder="Operator PIN" aria-describedby="devError"><div class="dev-error" id="devError" role="status"></div><div class="dev-modal-actions"><button type="button" id="devCancel" class="btn purple">CANCEL</button><button type="submit" id="devUnlock" class="btn yellow">UNLOCK</button></div></form></div></div>
 <div id="walletModal" class="modal-overlay" aria-hidden="true"><div class="wallet-modal" role="dialog" aria-modal="true" aria-labelledby="walletTitle"><button class="modal-close" id="closeWallet" aria-label="Close">×</button><div class="wallet-stars">✦ ✧ ✦</div><h2 id="walletTitle">CONNECT WALLET</h2><p>Choose a wallet to preview joining the race</p><div class="wallet-options"><button class="wallet-option" data-wallet="MetaMask"><span class="wallet-logo metamask-logo"><svg viewBox="0 0 48 48" width="39" height="39" aria-hidden="true"><polygon points="4,5 19,15 16,25 9,25" fill="#e2761b"/><polygon points="44,5 29,15 32,25 39,25" fill="#e2761b"/><polygon points="4,5 17,5 24,11 31,5 44,5 29,17 24,20 19,17" fill="#f6851b"/><polygon points="9,25 17,23 20,32 12,36" fill="#e4761b"/><polygon points="39,25 31,23 28,32 36,36" fill="#e4761b"/><polygon points="17,23 24,20 31,23 29,32 24,35 19,32" fill="#f6851b"/><polygon points="12,36 19,32 24,35 29,32 36,36 31,41 24,38 17,41" fill="#cd6116"/><polygon points="18,30 22,31 20,33" fill="#763d16"/><polygon points="30,30 26,31 28,33" fill="#763d16"/><polygon points="21,35 27,35 24,38" fill="#e4761b"/></svg></span><span>MetaMask</span><span class="wallet-chevron">›</span></button><button class="wallet-option" data-wallet="Coinbase Wallet"><span class="wallet-logo coinbase-logo"><svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><circle cx="24" cy="24" r="24" fill="#0052ff"/><path fill="white" fill-rule="evenodd" d="M24 11a13 13 0 1 0 0 26 13 13 0 0 0 0-26Zm-7 9h14v8H17z"/></svg></span><span>Coinbase Wallet</span><span class="wallet-chevron">›</span></button><button class="wallet-option" data-wallet="Phantom"><span class="wallet-logo phantom-logo"><svg viewBox="0 0 48 48" width="42" height="42" role="img" aria-label="Phantom wallet logo"><rect width="48" height="48" rx="14" fill="#AB9FF2"/><path d="M13 32.1c-.3-1.1-.5-2.4-.5-3.7 0-9.1 6.2-16.1 14.2-16.1 7.8 0 13.2 6.4 13.2 14 0 3.4-1.8 5.4-4.2 5.4-1.9 0-3-1.2-3.9-2.9-1.2 2.4-3 4-5.6 4-2.5 0-3.8-1.2-4.8-3.1-1.5 2.7-3.7 4.7-7 4.7-2.4 0-4.4-1.2-5.4-2.1Z" fill="#fff"/><circle cx="25.7" cy="22.3" r="1.8" fill="#6556A8"/><circle cx="33.2" cy="22.3" r="1.8" fill="#6556A8"/><path d="M16 30.8c-2.3 0-4.4 1.1-5.6 3.6" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></span><span>Phantom</span><span class="wallet-chevron">›</span></button></div><div class="wallet-disclaimer">DEMO ONLY · NO WALLET CONNECTION OR PAYMENT</div></div></div>
 <script>
@@ -797,6 +812,7 @@ function tryRevealPodium(){
  const remainingHold=Math.max(0,minHold-(performance.now()-podiumHoldStart));
  if(remainingHold){clearTimeout(podiumHoldTimer);podiumHoldTimer=setTimeout(tryRevealPodium,remainingHold);return;}
  podiumRevealed=true;
+ window.MonadMarblesPreviewBridge?.onPodiumReveal?.();
  // Begin the 15-second hold at reveal, even if a later transitionend is lost.
  clearTimeout(podiumReturnTimer);
  podiumReturnTimer=setTimeout(returnToLobbyAfterRace,15000);
@@ -1109,6 +1125,7 @@ window.MonadMarblesPreviewBridge={
  dismissedRaceKey:null,
  lastWallet:null,
  onReturnToLobby(){
+  this.onAudioReturn?.();
   this.dismissedRaceKey=syncedRaceKey;
   this.pendingResult=null;
   this.lastFrame=null;
