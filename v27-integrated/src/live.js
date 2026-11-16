@@ -9,11 +9,8 @@ const serverUrl = String(freeDemo ?
   (import.meta.env.VITE_RACE_SERVER_URL || '')).trim();
 const stage = document.querySelector('.stage');
 const isPaid = () => room?.demoOnly === false;
-const status = document.createElement('div');
-status.id = 'livePreviewStatus';
-status.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:400;background:#252054e8;color:white;border:1px solid #a399ef;border-radius:12px;padding:9px 14px;font:700 12px Nunito,sans-serif;max-width:360px';
-status.textContent = freeDemo ? 'FREE DEMO · Connecting to sandbox server…' : 'MONAD TESTNET · Connecting to paid race server…';
-document.body.append(status);
+// No floating status HUD on the public lobby.
+const status = { textContent: '' };
 
 if (!serverUrl) {
   status.textContent = 'V27 SANDBOX · VITE_RACE_SERVER_URL missing';
@@ -33,9 +30,13 @@ const ack = async (event, payload, timeout = 7000) => {
   if (!response?.ok) throw new Error(response?.error || 'Action was rejected');
   return response;
 };
-const notify = (message) => {
-  ui.toast(message);
-  status.textContent = 'V27 SANDBOX · ' + message;
+// Successful wallet connections, blockchain submissions and lobby updates
+// are reflected by the actual marble and contract state, not purple toasts.
+const notify = () => {};
+const showError = error => {
+  const message = String(error?.message || error || 'Action failed');
+  // An error is actionable; do not silently swallow rejected wallet payments.
+  window.alert(message);
 };
 const hasEntry = () => Boolean(room?.entries?.some(entry =>
   entry.wallet?.toLowerCase() === wallet?.toLowerCase() ||
@@ -51,25 +52,16 @@ let connectInFlight = null;
 const connectWallet = async () => {
   if (connectInFlight) return connectInFlight;
   const provider = getMetaMaskProvider();
-  if (!provider?.request) throw new Error('Install or enable MetaMask to join this preview');
+  if (!provider?.request) throw new Error('Install or enable MetaMask to join the race');
   connectInFlight = (async () => {
     let accounts = await provider.request({ method: 'eth_accounts' });
     if (!accounts?.[0]) {
       accounts = await provider.request({ method: 'eth_requestAccounts' });
     }
     if (!accounts?.[0]) throw new Error('No MetaMask account was returned');
-    const chainId = await provider.request({ method: 'eth_chainId' });
-    if (Number(BigInt(chainId)) !== 10143) {
-      try {
-        await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x279f' }] });
-      } catch (error) {
-        if (error?.code !== 4902) throw error;
-        await provider.request({
-          method: 'wallet_addEthereumChain',
-          params: [{ chainId: '0x279f', chainName: 'Monad Testnet', nativeCurrency: { name: 'Monad', symbol: 'MON', decimals: 18 }, rpcUrls: ['https://testnet-rpc.monad.xyz'], blockExplorerUrls: ['https://testnet.monadexplorer.com'] }],
-        });
-      }
-    }
+    // Connecting is identity-only. Never auto-switch/add chain on connect:
+    // those are extra wallet prompts, unrelated to permission approval.
+    // paid.js validates Monad Testnet immediately before sending a payment.
     wallet = accounts[0];
     ui.setWallet(wallet);
     notify('MetaMask connected · ' + short(wallet));
@@ -103,23 +95,36 @@ const paid = createPaidIntegration({
   notify,
   onChanged: () => renderLiveControls(),
 });
+// The ONE visible button connects MetaMask, then (on a later deliberate click)
+// submits an entry only when the server reports verified paid registration.
 const join = async () => {
   if (waitingToJoin) return;
   waitingToJoin = true;
   try {
-    if (!wallet) await connectWallet();
-    if (hasEntry()) return notify('Your marble is already registered');
-    if (room?.phase !== 'lobby') throw new Error('Registration is not open');
+    if (!wallet) {
+      await connectWallet();
+      return;
+    }
+    if (hasEntry()) return;
+    if (paid.matchesPending()) {
+      await paid.checkPayment();
+      return;
+    }
+    if (!room || !socket.connected) return;
+    if (room.phase !== 'lobby' ||
+        (isPaid() && (room.blockchain?.status !== 'open' || !ui.joinReady()))) return;
     const design = ui.getSelectedDesign();
     if (isPaid()) {
       await paid.join(design);
     } else {
-      const nickname = short(wallet);
-      await ack('lobby:join', { nickname, design });
-      notify('Free preview entry registered · no MON transferred');
+      await ack('lobby:join', { nickname: short(wallet), design });
     }
-  } catch (error) { notify(error.message || 'Unable to join'); }
-  finally { waitingToJoin = false; }
+  } catch (error) {
+    showError(error);
+  } finally {
+    waitingToJoin = false;
+    renderLiveControls();
+  }
 };
 
 ui.connected = false;
