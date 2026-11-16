@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 import { createPaidIntegration, formatWei, testnetExplorerTx, validateOnchainRoom, registrationMessage } from './paid.js';
 import { lobbyPresentation, organizerPresentation } from './lobby-status.js';
+import { GameAudio } from './audio.js';
 
 // Only the preconfigured free sandbox may be selected; no arbitrary RPC URL.
 const freeDemo = new URLSearchParams(location.search).get('demo') === '1';
@@ -23,6 +24,24 @@ let waitingToJoin = false;
 const short = (value) => value.slice(0, 6) + '…' + value.slice(-4);
 const ui = window.MonadMarblesPreviewBridge;
 if (!ui) throw new Error('V27 preview adapter did not initialize');
+
+// Audio is presentation-only and synthesized locally: never touches wallet
+// permissions, contract transactions or authoritative race/settlement data.
+const gameAudio = new GameAudio();
+gameAudio.setToggle(document.getElementById('gameSoundToggle'));
+ui.onPodiumReveal = () => gameAudio.onPodium();
+ui.onAudioReturn = () => gameAudio.onReturn();
+// Browser gesture policy: wake the AudioContext only from a real user action.
+document.addEventListener('pointerdown', event => {
+  if (event.target?.closest?.('#gameSoundToggle')) return;
+  gameAudio.unlock();
+}, { capture: true });
+document.addEventListener('keydown', event => {
+  if (event.repeat || event.target?.closest?.('#gameSoundToggle')) return;
+  gameAudio.unlock();
+}, { capture: true });
+document.addEventListener('visibilitychange', () => gameAudio.onVisibilityChange());
+window.addEventListener('pagehide', () => gameAudio.dispose());
 
 const ack = async (event, payload, timeout = 7000) => {
   if (!socket.connected) throw new Error('Race server is disconnected');
@@ -445,6 +464,7 @@ socket.on('lobby:state', next => {
   paid.refreshFromRoom(room);
   ui.applyRoom(room, wallet);
   renderLiveControls();
+  if (next.course === 'v27') gameAudio.onRoom(next);
   if (next.course !== 'v27') {
     status.textContent = 'V27 SANDBOX · Backend course mismatch — start disabled';
     document.getElementById('start').disabled = true;
@@ -460,7 +480,10 @@ socket.on('lobby:state', next => {
   if (prev && prev.sessionId !== next.sessionId) notify('Race server restarted · state refreshed');
 });
 socket.on('race:snapshot', frame => {
-  if (room && frame.raceId === room.raceId && frame.sessionId === room.sessionId) ui.setFrame(frame);
+  if (room && frame.raceId === room.raceId && frame.sessionId === room.sessionId) {
+    ui.setFrame(frame);
+    gameAudio.onFrame(frame);
+  }
 });
 socket.on('race:result', result => {
   if (room && result.raceId === room.raceId) ui.setOfficialResult(result);
