@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client';
-import { createPaidIntegration, formatWei, testnetExplorerTx, validateOnchainRoom } from './paid.js';
+import { createPaidIntegration, formatWei, testnetExplorerTx, validateOnchainRoom, registrationMessage } from './paid.js';
 import { lobbyPresentation, organizerPresentation } from './lobby-status.js';
 
 // Only the preconfigured free sandbox may be selected; no arbitrary RPC URL.
@@ -38,7 +38,7 @@ const showError = error => {
   // An error is actionable; do not silently swallow rejected wallet payments.
   window.alert(message);
 };
-const hasEntry = () => Boolean(wallet && room?.entries?.some(entry =>
+const hasEntry = () => Boolean(wallet && room?.phase !== 'finished' && room?.entries?.some(entry =>
   (entry.wallet && entry.wallet.toLowerCase() === wallet.toLowerCase()) ||
   entry.nickname === short(wallet)));
 // EIP-1193 single-flight: one wallet permission request at a time.
@@ -134,6 +134,7 @@ ui.verifyOperatorPin = async pin => {
 };
 ui.join = join;
 ui.poolDisplay = () => {
+  if (room?.phase === 'finished' && ui.isDismissed?.(ui.currentRaceKey?.())) return '0';
   if (!isPaid()) return (Number(room?.entries?.length || 0) * .1).toFixed(1);
   return formatWei(room.prizePoolWei || room.blockchain?.poolWei || '0');
 };
@@ -145,6 +146,79 @@ ui.joinReady = () => {
   } catch { return false; }
 };
 ui.getPendingPayment = () => paid.pending;
+let nicknameSaving = false;
+ui.isNicknameSaving = () => nicknameSaving;
+// Nickname is authenticated by the actual paid-entry MetaMask wallet. Signing
+// happens ONLY after an explicit click of SAVE, not during wallet connection.
+ui.saveNickname = async rawValue => {
+  if (nicknameSaving) return;
+  const nickname = String(rawValue || '').trim();
+  if (!nickname || nickname.length > 18 || /[<>\x00-\x1F\x7F]/.test(nickname)) {
+    showError('Nickname must be 1–18 printable characters (no < or >).');
+    return;
+  }
+  if (!wallet) { showError('Click JOIN THE RACE to connect MetaMask first.'); return; }
+  if (!room || room.phase !== 'lobby') {
+    showError('Nickname changes are available only while race submissions are open.');
+    return;
+  }
+  const editor = document.getElementById('nick');
+  const saveButton = document.getElementById('saveName');
+  const entry = room.entries?.find(item => item.wallet?.toLowerCase() === wallet.toLowerCase());
+  if (!entry) {
+    // Keep the preferred value in the input. Do not create a fake server entry
+    // and do not request a signature before a paid tx is confirmed.
+    editor.value = nickname;
+    saveButton.textContent = 'READY';
+    return;
+  }
+  if (entry.nickname === nickname) { saveButton.textContent = 'SAVED'; return; }
+  if (!isPaid()) {
+    showError('Signed nicknames require an on-chain race entry.');
+    return;
+  }
+  if (room.blockchain?.status !== 'open' || !room.blockchain?.synced) {
+    showError('Wait for registration to finish verifying before saving the nickname.');
+    return;
+  }
+  if (!/^0x[0-9a-f]{64}$/i.test(String(entry.txHash || ''))) {
+    showError('Verified entry transaction is not available yet.');
+    return;
+  }
+  nicknameSaving = true;
+  saveButton.disabled = true;
+  saveButton.textContent = 'SIGN…';
+  try {
+    const provider = getMetaMaskProvider();
+    if (!provider) throw new Error('MetaMask is required to verify your nickname.');
+    const accounts = await provider.request({ method: 'eth_accounts' });
+    if (!Array.isArray(accounts) ||
+        !accounts.some(x => x.toLowerCase() === wallet.toLowerCase())) {
+      throw new Error('Reconnect the paying MetaMask wallet first.');
+    }
+    const raceId = String(room.blockchain.chainRaceId);
+    const message = registrationMessage({
+      raceId, txHash: entry.txHash, nickname,
+      contractAddress: room.blockchain.contractAddress,
+    });
+    const signature = await provider.request({
+      method: 'personal_sign', params: [message, wallet],
+    });
+    if (!/^0x[0-9a-f]{130}$/i.test(String(signature || ''))) {
+      throw new Error('MetaMask did not return a valid nickname signature.');
+    }
+    await ack('lobby:verify',
+      { raceId, txHash:entry.txHash, nickname, signature }, 30000);
+    saveButton.textContent = 'SAVED';
+    // The backend sends the updated name to every viewer in lobby:state.
+  } catch (error) {
+    saveButton.textContent = 'SAVE';
+    showError(error);
+  } finally {
+    nicknameSaving = false;
+    saveButton.disabled = false;
+  }
+};
 ui.fill = async (pin, count) => {
   try {
     if (isPaid()) throw new Error('Bots cannot enter paid on-chain races.');
@@ -221,7 +295,6 @@ instantStart.onclick = async () => {
   if (!pin) { document.getElementById('devAccess').click(); return; }
   if (await ui.reset(pin)) notify('Free preview lobby reset · ready for a clean test');
 };
-document.getElementById('registrationTimer').style.display = 'none';
 const devTitle = document.querySelector('#devModalTitle');
 if (devTitle) devTitle.textContent = 'Operator PIN';
 const devHint = document.querySelector('#devModal p');
