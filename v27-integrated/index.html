@@ -1128,6 +1128,20 @@ window.MonadMarblesPreviewBridge={
  getSelectedDesign(){return selected},
  getOperatorPin(){return devToken||''},
  currentRaceKey(){return syncedRaceKey},
+ dismissedRaceKey:null,
+ lastWallet:null,
+ onReturnToLobby(){
+  this.dismissedRaceKey=syncedRaceKey;
+  this.pendingResult=null;
+  this.lastFrame=null;
+ },
+ isDismissed(key){return Boolean(key && key===this.dismissedRaceKey)},
+ onNewRace(key){
+  if(this.dismissedRaceKey!==key)this.dismissedRaceKey=null;
+ },
+ restoreLobby(){
+  if(this.liveRoom)this.applyRoom(this.liveRoom,this.lastWallet);
+ },
  toast,
  setConnected(yes){this.connected=Boolean(yes);if(!yes)$('start').disabled=true;},
  setWallet(address){
@@ -1146,6 +1160,7 @@ window.MonadMarblesPreviewBridge={
  applyRoom(next,wallet){
   if(!next)return;
   this.liveRoom=next;
+  if(wallet)this.lastWallet=wallet;
   const key=String(next.sessionId||'')+'-'+String(next.raceId||'');
   if(syncedRaceKey!==key){
    if(syncedRaceKey)resetPreview();
@@ -1194,7 +1209,9 @@ window.MonadMarblesPreviewBridge={
    running=false;finished=false;preRaceActive=false;
    stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;
   }
-  $('join').disabled=!isLobby||Boolean(myMarble)||incoming.length>=next.maxPlayers||(next.demoOnly===false&&!this.joinReady?.());
+  // Main join button can ALWAYS begin MetaMask connection; paid validation
+  // still occurs inside the wallet transaction flow after a race opens.
+  $('join').disabled=Boolean(myMarble);
   $('join').textContent=myMarble?'ENTERED RACE':'JOIN THE RACE';
   $('start').disabled=!isLobby||incoming.length<2;
   $('addOne').disabled=!isLobby;$('addTen').disabled=!isLobby;
@@ -1218,7 +1235,7 @@ window.MonadMarblesPreviewBridge={
   update();
   $('pool').textContent=this.poolDisplay?.()??(incoming.length*Number(next.demoEntryFee||0.1)).toFixed(1);
   $('count').textContent=String(incoming.length);
-  $('join').disabled=!isLobby||Boolean(myMarble)||incoming.length>=next.maxPlayers||(next.demoOnly===false&&!this.joinReady?.());
+  $('join').disabled=Boolean(myMarble);
   $('start').disabled=!isLobby||incoming.length<2;
  },
  setFrame(frame){
