@@ -795,6 +795,9 @@ function tryRevealPodium(){
  const remainingHold=Math.max(0,minHold-(performance.now()-podiumHoldStart));
  if(remainingHold){clearTimeout(podiumHoldTimer);podiumHoldTimer=setTimeout(tryRevealPodium,remainingHold);return;}
  podiumRevealed=true;
+ // Begin the 15-second hold at reveal, even if a later transitionend is lost.
+ clearTimeout(podiumReturnTimer);
+ podiumReturnTimer=setTimeout(returnToLobbyAfterRace,15000);
  requestAnimationFrame(()=>{overlay.classList.remove('covering');overlay.classList.add('revealing')});
 }
 function beginPodiumTransition(){
@@ -815,8 +818,6 @@ function beginPodiumTransition(){
    curtain.removeEventListener('transitionend',onPodiumCurtainEnd);podiumEndHandler=null;
    overlay.hidden=true;overlay.classList.remove('covering','revealing','impact');
    podiumTransitioning=false;clearTimeout(podiumTimeout);
-   clearTimeout(podiumReturnTimer);
-   podiumReturnTimer=setTimeout(returnToLobbyAfterRace,15000);
   }
  }
  curtain.addEventListener('transitionend',onPodiumCurtainEnd);
@@ -1128,8 +1129,7 @@ window.MonadMarblesPreviewBridge={
   if(this.liveRoom?.demoOnly===false){
    $('playerEditor').hidden=false;
    document.querySelector('.nickname-field').style.display='flex';
-   $('playerWallet').textContent=p?'VERIFIED ON-CHAIN MARBLE · DESIGN LOCKED':
-    'CONNECTED: '+shortAddr(address)+' · PICK YOUR MARBLE BEFORE PAYING';
+   $('playerWallet').textContent='';
   }else if(p){syncPlayerPreview()}
  },
  applyRoom(next,wallet){
@@ -1146,7 +1146,7 @@ window.MonadMarblesPreviewBridge={
   // entries and no unverified "mock wallet" entries survive synchronization.
   // On return, the finalized on-chain result can remain in the server journal,
   // but its entries belong to the previous round and must disappear from the bowl.
-  const incoming=(next.phase==='finished'&&this.isDismissed(key))?[]:
+  const incoming=next.phase==='finished'?[]:
     (Array.isArray(next.entries)?next.entries:[]);
   const accepted=new Map(incoming.map(entry=>[entry.id,entry]));
   if(entrants.some(p=>!accepted.has(p.serverId))){
@@ -1175,12 +1175,13 @@ window.MonadMarblesPreviewBridge={
    if(next.demoOnly===false){
     $('playerEditor').hidden=false;
     document.querySelector('.nickname-field').style.display='flex';
-    $('playerWallet').textContent='CONNECTED: '+shortAddr(wallet)+' · PICK YOUR MARBLE BEFORE PAYING';
+    $('playerWallet').textContent='';
    }
    myMarble=entrants.find(x=>x.wallet?.toLowerCase()===wallet.toLowerCase() || x.name.toLowerCase()===(wallet.slice(0,6)+'…'+wallet.slice(-4)).toLowerCase())||null;
    if(myMarble){
     $('playerEditor').hidden=false;syncPlayerPreview();
-    if(document.activeElement!==$('nick') && !this.isNicknameSaving?.()){
+    if(document.activeElement!==$('nick') && !this.isNicknameSaving?.() &&
+       !$('nick').value.trim()){
      $('nick').value=myMarble.name;
     }
    }
@@ -1188,7 +1189,7 @@ window.MonadMarblesPreviewBridge={
   const isLobby=next.phase==='lobby';
   const isCountdown=next.phase==='countdown';
   if((next.phase==='waiting'||isLobby || (next.phase==='finished'&&this.isDismissed(key)))&&!raceActive&&!raceTransitioning){
-   // One source of truth: stale local 90-second timer must not close registrations.
+   // One source of truth: the server alone controls whether entries are open.
    running=false;finished=false;preRaceActive=false;
    stage.classList.remove('pre-race');$('preRaceCountdown').hidden=true;
   }
